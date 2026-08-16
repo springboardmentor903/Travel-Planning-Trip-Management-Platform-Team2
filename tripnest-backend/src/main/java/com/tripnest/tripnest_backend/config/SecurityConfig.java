@@ -1,5 +1,5 @@
 package com.tripnest.tripnest_backend.config;
- 
+
 import com.tripnest.tripnest_backend.security.CustomAccessDeniedHandler;
 import com.tripnest.tripnest_backend.security.CustomAuthenticationEntryPoint;
 import com.tripnest.tripnest_backend.security.JwtAuthFilter;
@@ -20,18 +20,18 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
- 
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
- 
+
     private final JwtAuthFilter jwtAuthFilter;
     private final CustomAccessDeniedHandler accessDeniedHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
- 
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -49,14 +49,13 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config);
         return source;
     }
- 
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
-                // STATELESS for JWT, but OAuth2 needs a brief session for the redirect flow
                 session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
