@@ -24,35 +24,59 @@ public class TripController {
     public ResponseEntity<TripResponse> create(
             @Valid @RequestBody TripRequest request,
             Authentication authentication) {
-        TripResponse response = tripService.create(request, authentication.getName());
+
+        TripResponse response =
+                tripService.create(request, authentication.getName());
+
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+
     // GET /api/trips — list my trips
     @GetMapping
-    public List<TripResponse> listMyTrips(Authentication authentication) {
+    public List<TripResponse> listMyTrips(
+            Authentication authentication) {
+
         return tripService.listMyTrips(authentication.getName());
     }
 
+
     // GET /api/trips/{id} — get one trip by id
     @GetMapping("/{id}")
-    public TripResponse getById(@PathVariable Integer id, Authentication authentication) {
+    public TripResponse getById(
+            @PathVariable Long id,
+            Authentication authentication) {
+
         return tripService.getById(id, authentication.getName());
     }
+
 
     // PUT /api/trips/{id} — update a trip
     @PutMapping("/{id}")
     public TripResponse update(
-            @PathVariable Integer id,
+            @PathVariable Long id,
             @Valid @RequestBody TripRequest request,
             Authentication authentication) {
-        return tripService.update(id, request, authentication.getName());
+
+        return tripService.update(
+                id,
+                request,
+                authentication.getName()
+        );
     }
+
 
     // DELETE /api/trips/{id} — delete a trip
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Integer id, Authentication authentication) {
-        tripService.delete(id, authentication.getName());
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        tripService.delete(
+                id,
+                authentication.getName()
+        );
+
         return ResponseEntity.noContent().build();
     }
 }

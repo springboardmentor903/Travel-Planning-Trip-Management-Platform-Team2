@@ -22,45 +22,75 @@ public class TripService {
     private final DestinationRepository destinationRepository;
 
     public TripResponse create(TripRequest request, String email) {
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Trip trip = new Trip();
+
         trip.setTitle(request.getTitle());
         trip.setUser(user);
         trip.setStartDate(request.getStartDate());
         trip.setEndDate(request.getEndDate());
         trip.setDescription(request.getDescription());
         trip.setBudget(request.getBudget());
-        trip.setStatus(request.getStatus() != null ? request.getStatus() : "PLANNED");
+        trip.setStatus(
+                request.getStatus() != null
+                        ? request.getStatus()
+                        : "PLANNED"
+        );
 
         if (request.getDestinationId() != null) {
-            Destination dest = destinationRepository.findById(request.getDestinationId())
-                    .orElseThrow(() -> new RuntimeException("Destination not found"));
+
+            Destination dest = destinationRepository
+                    .findById(request.getDestinationId())
+                    .orElseThrow(() ->
+                            new RuntimeException("Destination not found"));
+
             trip.setDestination(dest);
         }
 
         return toResponse(tripRepository.save(trip));
     }
 
+
     public List<TripResponse> listMyTrips(String email) {
-        return tripRepository.findByUserEmail(email).stream()
+
+        return tripRepository.findByUserEmail(email)
+                .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
-    public TripResponse getById(Integer id, String email) {
+
+    public TripResponse getById(Long id, String email) {
+
         Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + id));
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Trip not found with id: " + id
+                        ));
+
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
+
         return toResponse(trip);
     }
 
-    public TripResponse update(Integer id, TripRequest request, String email) {
+
+    public TripResponse update(
+            Long id,
+            TripRequest request,
+            String email
+    ) {
+
         Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + id));
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Trip not found with id: " + id
+                        ));
+
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
@@ -70,31 +100,49 @@ public class TripService {
         trip.setEndDate(request.getEndDate());
         trip.setDescription(request.getDescription());
         trip.setBudget(request.getBudget());
-        if (request.getStatus() != null) trip.setStatus(request.getStatus());
+
+        if (request.getStatus() != null) {
+            trip.setStatus(request.getStatus());
+        }
 
         if (request.getDestinationId() != null) {
-            Destination dest = destinationRepository.findById(request.getDestinationId())
-                    .orElseThrow(() -> new RuntimeException("Destination not found"));
+
+            Destination dest = destinationRepository
+                    .findById(request.getDestinationId())
+                    .orElseThrow(() ->
+                            new RuntimeException("Destination not found"));
+
             trip.setDestination(dest);
         }
 
         return toResponse(tripRepository.save(trip));
     }
 
-    public void delete(Integer id, String email) {
+
+    public void delete(Long id, String email) {
+
         Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + id));
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Trip not found with id: " + id
+                        ));
+
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
+
         tripRepository.delete(trip);
     }
 
+
     private TripResponse toResponse(Trip t) {
+
         return new TripResponse(
                 t.getId(),
                 t.getTitle(),
-                t.getDestination() != null ? t.getDestination().getName() : null,
+                t.getDestination() != null
+                        ? t.getDestination().getName()
+                        : null,
                 t.getUser().getName(),
                 t.getStartDate(),
                 t.getEndDate(),

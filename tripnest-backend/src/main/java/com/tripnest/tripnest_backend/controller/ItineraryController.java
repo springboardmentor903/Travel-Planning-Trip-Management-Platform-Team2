@@ -22,7 +22,7 @@ public class ItineraryController {
     // POST /api/trips/{tripId}/itineraries — add a day to the trip
     @PostMapping
     public ResponseEntity<ItineraryResponse> addDay(
-            @PathVariable Integer tripId,
+            @PathVariable Long tripId,
             @Valid @RequestBody ItineraryRequest request,
             Authentication authentication) {
         ItineraryResponse response = itineraryService.addDay(tripId, request, authentication.getName());
@@ -32,7 +32,7 @@ public class ItineraryController {
     // GET /api/trips/{tripId}/itineraries — list all days in my trip
     @GetMapping
     public List<ItineraryResponse> listDays(
-            @PathVariable Integer tripId,
+            @PathVariable Long tripId,
             Authentication authentication) {
         return itineraryService.listDays(tripId, authentication.getName());
     }

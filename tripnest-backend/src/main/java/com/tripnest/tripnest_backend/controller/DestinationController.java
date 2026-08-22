@@ -15,27 +15,89 @@ public class DestinationController {
 
     private final DestinationService destinationService;
 
-    // GET /api/destinations — list all destinations
+
+    // =========================
+    // GET ALL DESTINATIONS
+    // =========================
+
     @GetMapping
     public List<DestinationResponse> listAll() {
+
         return destinationService.listAll();
     }
 
-    // GET /api/destinations/popular — get popular destinations
+
+    // =========================
+    // GET POPULAR DESTINATIONS
+    // =========================
+
     @GetMapping("/popular")
     public List<DestinationResponse> getPopular() {
+
         return destinationService.getPopular();
     }
 
-    // GET /api/destinations/{id} — get one destination by id
+
+    // =========================
+    // SEARCH USING OPENSTREETMAP
+    // =========================
+
+    // Example:
+    // GET /api/destinations/search?query=London
+
+    @GetMapping("/search")
+    public List<Map<String, Object>> searchDestinations(
+            @RequestParam String query
+    ) {
+
+        return destinationService.searchDestinations(query);
+    }
+
+
+    // =========================
+    // WEATHER FOR SEARCHED
+    // OPENSTREETMAP LOCATION
+    // =========================
+
+    // Example:
+    // GET /api/destinations/weather?lat=51.5074&lon=-0.1278
+
+    @GetMapping("/weather")
+    public Map<String, Object> getWeatherByCoordinates(
+            @RequestParam double lat,
+            @RequestParam double lon
+    ) {
+
+        return destinationService.getWeatherByCoordinates(
+                lat,
+                lon
+        );
+    }
+
+
+    // =========================
+    // GET DATABASE DESTINATION
+    // =========================
+
     @GetMapping("/{id}")
-    public DestinationResponse getById(@PathVariable Integer id) {
+    public DestinationResponse getById(
+            @PathVariable Integer id
+    ) {
+
         return destinationService.getById(id);
     }
 
-    // GET /api/destinations/{id}/weather — live weather for destination
+
+    // =========================
+    // WEATHER FOR DATABASE
+    // DESTINATION
+    // =========================
+
     @GetMapping("/{id}/weather")
-    public Map<String, Object> getWeather(@PathVariable Integer id) {
+    public Map<String, Object> getWeather(
+            @PathVariable Integer id
+    ) {
+
         return destinationService.getWeather(id);
     }
 }

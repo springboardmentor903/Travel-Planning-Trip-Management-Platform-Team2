@@ -19,9 +19,18 @@ public class ItineraryService {
     private final TripRepository tripRepository;
 
     // POST /trips/{tripId}/itineraries — add a day to the trip
-    public ItineraryResponse addDay(Integer tripId, ItineraryRequest request, String email) {
+    public ItineraryResponse addDay(
+            Long tripId,
+            ItineraryRequest request,
+            String email
+    ) {
+
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + tripId));
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Trip not found with id: " + tripId
+                        ));
+
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
@@ -34,18 +43,38 @@ public class ItineraryService {
         return toResponse(itineraryRepository.save(itinerary));
     }
 
+
     // GET /trips/{tripId}/itineraries — list all days in my trip
-    public List<ItineraryResponse> listDays(Integer tripId, String email) {
+    public List<ItineraryResponse> listDays(
+            Long tripId,
+            String email
+    ) {
+
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + tripId));
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Trip not found with id: " + tripId
+                        ));
+
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
-        return itineraryRepository.findByTripIdOrderByDayDateAsc(tripId)
-                .stream().map(this::toResponse).toList();
+
+        return itineraryRepository
+                .findByTripIdOrderByDayDateAsc(tripId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
+
     private ItineraryResponse toResponse(Itinerary i) {
-        return new ItineraryResponse(i.getId(), i.getTrip().getId(), i.getDayDate(), i.getNotes());
+
+        return new ItineraryResponse(
+                i.getId(),
+                i.getTrip().getId(),
+                i.getDayDate(),
+                i.getNotes()
+        );
     }
 }

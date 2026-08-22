@@ -1,55 +1,125 @@
 package com.tripnest.tripnest_backend.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "trips")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class Trip {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private Long id;
 
-    @Column(nullable = false)
     private String title;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    private LocalDate startDate;
+
+    private LocalDate endDate;
+
+    private String description;
+
+    private Double budget;
+
+    private String status;
+
+    private LocalDateTime createdAt;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    @ManyToOne
     @JoinColumn(name = "destination_id")
     private Destination destination;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
 
-    @Column(name = "start_date")
-    private LocalDate startDate;
+    // Getters and Setters
 
-    @Column(name = "end_date")
-    private LocalDate endDate;
+    public Long getId() {
+        return id;
+    }
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    @Column
-    private Double budget;
+    public String getTitle() {
+        return title;
+    }
 
-    @Column(nullable = false)
-    private String status = "PLANNED"; // PLANNED, ONGOING, COMPLETED, CANCELLED
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    public LocalDate getStartDate() {
+        return startDate;
+    }
 
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public Double getBudget() {
+        return budget;
+    }
+
+    public void setBudget(Double budget) {
+        this.budget = budget;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public Destination getDestination() {
+        return destination;
+    }
+
+    public void setDestination(Destination destination) {
+        this.destination = destination;
+    }
+
+
+    // Automatically set creation time
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
+        createdAt = LocalDateTime.now();
     }
 }

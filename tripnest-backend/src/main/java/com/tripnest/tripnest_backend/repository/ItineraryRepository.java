@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface ItineraryRepository extends JpaRepository<Itinerary, Integer> {
-    List<Itinerary> findByTripIdOrderByDayDateAsc(Integer tripId);
+
+    List<Itinerary> findByTripIdOrderByDayDateAsc(Long tripId);
 }

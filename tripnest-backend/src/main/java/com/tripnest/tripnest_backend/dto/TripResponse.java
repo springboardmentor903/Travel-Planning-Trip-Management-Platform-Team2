@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TripResponse {
-    private Integer id;
+
+    private Long id;
     private String title;
     private String destinationName;
     private String ownerName;

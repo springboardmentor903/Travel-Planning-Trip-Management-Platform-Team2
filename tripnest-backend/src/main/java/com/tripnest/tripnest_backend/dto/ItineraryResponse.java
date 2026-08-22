@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class ItineraryResponse {
     private Integer id;
-    private Integer tripId;
+    private Long tripId;
     private LocalDate dayDate;
     private String notes;
 }
