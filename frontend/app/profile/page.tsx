@@ -1,5 +1,103 @@
 "use client";
 
+<<<<<<< HEAD
+import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Navbar from "@/components/Navbar";
+
+const PREFERENCES = ["Beach", "Mountains", "City", "Adventure", "Cultural", "Backpacking", "Luxury", "Road Trip"];
+const FAVOURITES   = ["Paris", "Bali", "Tokyo", "New York", "Maldives", "Dubai", "Rome", "Bangkok"];
+
+function ProfileContent() {
+  const { user } = useAuth();
+  const [selectedPrefs, setSelectedPrefs]   = useState<string[]>([]);
+  const [selectedFavs,  setSelectedFavs]    = useState<string[]>([]);
+
+  function toggle(item: string, list: string[], setList: (v: string[]) => void) {
+    setList(list.includes(item) ? list.filter(i => i !== item) : [...list, item]);
+  }
+
+  const chip = (active: boolean) =>
+    `px-4 py-1.5 rounded-full text-sm font-medium border cursor-pointer transition-colors ${
+      active ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-600 border-gray-300 hover:border-orange-400"
+    }`;
+
+  return (
+    <div className="min-h-screen bg-[#f0f2f5]">
+      <Navbar />
+      <main className="max-w-3xl mx-auto px-6 py-10 space-y-6">
+
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+          <p className="text-sm text-gray-400 mt-1">Your travel identity.</p>
+        </div>
+
+        {/* Basic info card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-5 mb-6">
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center text-2xl font-bold text-orange-500">
+              {user?.name?.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-lg font-bold text-gray-900">{user?.name}</p>
+              <p className="text-sm text-gray-400">{user?.email}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="bg-[#f0f2f5] rounded-xl p-4">
+              <p className="text-xs text-gray-400 mb-1">User ID</p>
+              <p className="font-semibold text-gray-900">#{user?.id}</p>
+            </div>
+            <div className="bg-[#f0f2f5] rounded-xl p-4">
+              <p className="text-xs text-gray-400 mb-1">Token</p>
+              <p className="font-semibold text-orange-500">Active ✓</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Travel Preferences */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-base font-bold text-gray-900 mb-4">Travel Preferences</h2>
+          <div className="flex flex-wrap gap-2">
+            {PREFERENCES.map(p => (
+              <button key={p} onClick={() => toggle(p, selectedPrefs, setSelectedPrefs)}
+                className={chip(selectedPrefs.includes(p))}>
+                {p}
+              </button>
+            ))}
+          </div>
+          {selectedPrefs.length > 0 && (
+            <p className="text-xs text-gray-400 mt-3">Selected: {selectedPrefs.join(", ")}</p>
+          )}
+        </div>
+
+        {/* Favourite Destinations */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-base font-bold text-gray-900 mb-4">Favourite Destinations</h2>
+          <div className="flex flex-wrap gap-2">
+            {FAVOURITES.map(d => (
+              <button key={d} onClick={() => toggle(d, selectedFavs, setSelectedFavs)}
+                className={chip(selectedFavs.includes(d))}>
+                {d}
+              </button>
+            ))}
+          </div>
+          {selectedFavs.length > 0 && (
+            <p className="text-xs text-gray-400 mt-3">Selected: {selectedFavs.join(", ")}</p>
+          )}
+        </div>
+
+      </main>
+    </div>
+  );
+}
+
+export default function ProfilePage() {
+  return <ProtectedRoute><ProfileContent /></ProtectedRoute>;
+}
+=======
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { userApi } from "@/lib/api";
@@ -245,3 +343,4 @@ export default function ProfilePage() {
         </ProtectedRoute>
     );
 }
+>>>>>>> origin/intern_saisushma

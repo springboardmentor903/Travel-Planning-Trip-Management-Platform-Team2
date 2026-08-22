@@ -1,30 +1,21 @@
-// Auth API request/response types matching the Spring Boot backend exactly
+// Auth
+export interface RegisterRequest { name: string; email: string; password: string; }
+export interface LoginRequest { email: string; password: string; }
+export interface AuthResponse { id: number; name: string; email: string; message: string; token: string | null; }
+export interface AuthUser { id: number; name: string; email: string; token: string; }
 
-export interface RegisterRequest {
-  name: string;
-  email: string;
-  password: string;
-}
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface AuthResponse {
+// Trips
+export interface TripResponse {
   id: number;
-  name: string;
-  email: string;
-  message: string;
-  token: string | null;
-}
-
-// Stored in localStorage after login
-export interface AuthUser {
-  id: number;
-  name: string;
-  email: string;
-  token: string;
+  title: string;
+  destinationName: string | null;
+  ownerName: string;
+  startDate: string | null;
+  endDate: string | null;
+  description: string | null;
+  budget: number | null;
+  status: string;
+  createdAt: string;
 }
 export interface TripRequest {
   title: string;

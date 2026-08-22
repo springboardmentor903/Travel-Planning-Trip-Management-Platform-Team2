@@ -1,3 +1,32 @@
+<<<<<<< HEAD
+import { AuthResponse, LoginRequest, RegisterRequest, TripResponse } from "./types";
+
+const BASE_URL = "http://localhost:8081";
+
+async function request<T>(endpoint: string, options: RequestInit, token?: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || data?.error || `Error ${res.status}`);
+  return data as T;
+}
+
+export const authApi = {
+  register: (body: RegisterRequest) =>
+    request<AuthResponse>("/api/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  login: (body: LoginRequest) =>
+    request<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
+};
+
+export const tripApi = {
+  listMyTrips: (token: string) =>
+    request<TripResponse[]>("/api/trips", { method: "GET" }, token),
+=======
 import {
     AuthResponse,
     LoginRequest,
@@ -65,6 +94,7 @@ export const authApi = {
             method: "POST",
             body: JSON.stringify(body),
         }),
+>>>>>>> origin/intern_saisushma
 };
 
 
