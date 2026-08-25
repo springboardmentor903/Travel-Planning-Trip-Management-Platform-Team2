@@ -23,8 +23,18 @@ public class User {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "favorite_destination_id")
+    private Destination favoriteDestination;
     @Column(name = "oauth_google")
     private Boolean oauthGoogle = false;
+
+    @Column(columnDefinition = "TEXT")
+    private String address;
+
+    @Column(name = "profile_photo_url")
+    private String profilePhotoUrl;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
     @PrePersist

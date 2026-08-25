@@ -11,7 +11,6 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
-    // Placeholder — password reset backend not yet implemented
     await new Promise(r => setTimeout(r, 1000));
     setSent(true);
     setLoading(false);
@@ -19,44 +18,46 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold text-gray-900 mb-2 leading-tight">
+      <h1 className="text-[1.75rem] font-bold text-white leading-snug mb-2">
         Forgot your<br />password?
       </h1>
-      <p className="text-gray-500 text-sm mb-7">
+      <p className="text-white/60 text-sm mb-8 leading-relaxed">
         Enter your email address or phone number to receive instructions
         on how to reset your password.
       </p>
 
       {sent ? (
-        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-4 text-sm text-green-700 mb-6">
-          ✅ Reset instructions sent to <strong>{email}</strong>. Check your inbox.
+        <div className="glass-banner glass-banner--success mb-6">
+          <span className="shrink-0">✅</span>
+          <span>Reset instructions sent to <strong>{email}</strong>. Check your inbox.</span>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Email or Phone</label>
+            <label className="glass-label">
+              Email or Phone
+            </label>
             <input
               type="text" required
               value={email} onChange={e => setEmail(e.target.value)}
               placeholder="Email or Phone"
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm
-                         focus:outline-none focus:border-orange-400 placeholder-gray-400"
+              className="glass-input"
             />
           </div>
 
           <button
             type="submit" disabled={loading}
-            className="rounded-full bg-orange-500 hover:bg-orange-600 px-6 py-2.5 text-sm
-                       font-semibold text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="glass-btn-primary w-full px-6 py-3
+                       disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
           >
             {loading ? "Sending…" : "Send Reset Instructions"}
           </button>
         </form>
       )}
 
-      <p className="mt-8 text-sm text-gray-500">
+      <p className="mt-8 text-sm text-white/60">
         Remember your password?{" "}
-        <Link href="/login" className="text-orange-500 font-medium hover:underline">
+        <Link href="/login" className="text-orange-400 font-semibold hover:text-orange-300 hover:underline transition-colors">
           Log In
         </Link>
       </p>

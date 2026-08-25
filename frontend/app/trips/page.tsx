@@ -3,322 +3,235 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { useAuth } from "@/context/AuthContext";
+import Navbar from "@/components/Navbar";
 import { tripApi } from "@/lib/api";
 import { TripResponse } from "@/lib/types";
+import FadeIn from "@/components/ui/FadeIn";
+import { StaggerList, StaggerItem } from "@/components/ui/StaggerList";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
+
+const STATUS_PILL: Record<string, string> = {
+  PLANNED: "glass-pill glass-pill--planned",
+  ONGOING: "glass-pill glass-pill--ongoing",
+  COMPLETED: "glass-pill glass-pill--completed",
+  CANCELLED: "glass-pill glass-pill--cancelled",
+};
+
+function Orbs() {
+  return (
+    <div className="glass-orbs pointer-events-none">
+      <motion.div
+        className="glass-orb glass-orb--orange"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--violet"
+        animate={{ x: [0, -25, 0], y: [0, 20, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--cyan"
+        animate={{ x: [0, 20, 0], y: [0, 25, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
 
 function TripsContent() {
-    const { user, logout } = useAuth();
-    const router = useRouter();
+  const router = useRouter();
+  const [trips, setTrips] = useState<TripResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { toasts, addToast, removeToast } = useToast();
 
-    const [trips, setTrips] = useState<TripResponse[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+  useEffect(() => {
+    loadTrips();
+  }, []);
 
-    useEffect(() => {
-        async function loadTrips() {
-            try {
-                setLoading(true);
-                setError("");
-
-                const data = await tripApi.getAll();
-                setTrips(data);
-            } catch (err: unknown) {
-                console.error(err);
-
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Unable to load your trips."
-                );
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        loadTrips();
-    }, []);
-
-    function handleLogout() {
-        logout();
-        router.push("/login");
+  async function loadTrips() {
+    try {
+      setLoading(true);
+      setError("");
+      setTrips(await tripApi.getAll());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unable to load trips.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    return (
-        <div className="min-h-screen bg-[#f0f2f5]">
+  async function handleDelete(id: number) {
+    if (!confirm("Delete this trip? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await tripApi.delete(id);
+      setTrips((prev) => prev.filter((t) => t.id !== id));
+      addToast("Trip deleted", "success");
+    } catch (err: unknown) {
+      addToast(err instanceof Error ? err.message : "Failed to delete trip.", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
-            {/* Navbar */}
-            <nav className="bg-white border-b border-gray-200 px-8 py-4">
-                <div className="max-w-6xl mx-auto flex items-center justify-between">
+  return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar />
 
-                    {/* Logo */}
-                    <Link
-                        href="/dashboard"
-                        className="flex items-center gap-1"
-                    >
-                        <span className="text-xl font-bold text-gray-900 tracking-tight">
-                            TripNest
-                        </span>
+      <main className="glass-content relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
+        <FadeIn direction="down">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+            <div>
+              <h1 className="glass-h1">My Trips</h1>
+              <p className="glass-sub mt-1">Plan, track, and manage all your adventures.</p>
+            </div>
+          </div>
+        </FadeIn>
 
-                        <span className="w-2 h-2 rounded-full bg-orange-500 mb-3" />
-                    </Link>
+        <FadeIn direction="up">
+          <div className="relative h-[28rem] sm:h-[36rem] lg:h-[42rem] overflow-hidden rounded-3xl border border-white/15 shadow-2xl mb-8">
+            <img
+              src="/trips-beach.avif"
+              alt="Tropical beach destination"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a]/90 via-[#0f172a]/45 to-[#0f172a]/20" />
+            <div className="relative z-10 flex h-full max-w-md flex-col justify-center px-6 sm:px-8">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Plan your escape</span>
+              <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Make room for somewhere beautiful.</h2>
+              <p className="mt-2 text-sm text-white/70">Build a trip that feels like yours.</p>
+            </div>
+          </div>
+        </FadeIn>
 
-                    {/* Navigation */}
-                    <div className="flex items-center gap-6">
+        {loading && (
+          <div className="glass-card p-14 text-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-orange-400 border-t-transparent mx-auto mb-4" />
+            <p className="text-white/60 text-sm">Loading your trips…</p>
+          </div>
+        )}
 
-                        <Link
-                            href="/destinations"
-                            className="text-sm text-gray-600 hover:text-orange-500 transition-colors"
-                        >
-                            Destinations
-                        </Link>
+        {!loading && error && (
+          <div className="glass-card p-14 text-center">
+            <div className="glass-banner glass-banner--error mb-6 text-left">
+              <TripIcon name="warning" className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={loadTrips}
+              className="glass-btn-primary px-6 py-3"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
 
-                        <Link
-                            href="/profile"
-                            className="text-sm text-gray-600 hover:text-orange-500 transition-colors"
-                        >
-                            Profile
-                        </Link>
+        {!loading && !error && trips.length === 0 && (
+          <div className="glass-card p-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500/20 to-rose-500/20 border border-white/10 flex items-center justify-center mx-auto mb-5">
+              <TripIcon name="plane" className="h-8 w-8 text-orange-200" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">No trips yet</h2>
+            <p className="text-white/60 text-sm mb-8">Start planning your first adventure with TripNest.</p>
+            <Link
+              href="/trips/create"
+              className="glass-btn-primary inline-flex items-center justify-center px-7 py-3"
+            >
+              Create Your First Trip
+            </Link>
+          </div>
+        )}
 
-                        <span className="text-sm text-gray-500">
-                            Welcome,{" "}
-                            <span className="font-semibold text-gray-900">
-                                {user?.name}
-                            </span>
-                        </span>
-
-                        <button
-                            onClick={handleLogout}
-                            className="rounded-full border border-gray-300 bg-white px-5 py-1.5 text-sm font-medium
-                            text-gray-700 hover:border-orange-400 hover:text-orange-500 transition-colors"
-                        >
-                            Sign out
-                        </button>
-
+        {!loading && !error && trips.length > 0 && (
+          <StaggerList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {trips.map((trip) => (
+              <StaggerItem key={trip.id}>
+                <div className="glass-card-md overflow-hidden flex flex-col">
+                  <div className="px-6 py-5 border-b border-white/10 bg-gradient-to-br from-orange-500/15 via-amber-500/10 to-transparent">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={STATUS_PILL[trip.status] ?? "glass-pill glass-pill--default"}>
+                        {trip.status}
+                      </span>
+                      <span className="text-xs text-white/40 font-medium">#{trip.id}</span>
                     </div>
+                    <h2 className="text-base font-bold text-white truncate">{trip.title}</h2>
+                  </div>
+
+                  <div className="px-6 py-5 flex flex-col gap-3 flex-1">
+                    <div className="space-y-1.5 text-sm">
+                      <Row label="Destination" value={trip.destinationName ?? "Not specified"} />
+                      <Row label="Start" value={trip.startDate ?? "—"} />
+                      <Row label="End" value={trip.endDate ?? "—"} />
+                      <Row label="Budget" value={trip.budget != null ? `₹${trip.budget.toLocaleString()}` : "—"} />
+                    </div>
+
+                    {trip.description && (
+                      <p className="text-sm text-white/60 line-clamp-2 leading-relaxed">{trip.description}</p>
+                    )}
+
+                    <div className="mt-auto pt-4 border-t border-white/10 flex gap-2">
+                      <Link
+                        href={`/trips/${trip.id}`}
+                        className="glass-btn-outline flex-1 px-4 py-2 text-center"
+                      >
+                        View
+                      </Link>
+                      <Link
+                        href={`/trips/${trip.id}/edit`}
+                        className="glass-btn-ghost px-4 py-2"
+                      >
+                        Edit
+                      </Link>
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleDelete(trip.id)}
+                        disabled={deletingId === trip.id}
+                        className="glass-btn-danger px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === trip.id ? "…" : "Delete"}
+                      </motion.button>
+                    </div>
+                  </div>
                 </div>
-            </nav>
+              </StaggerItem>
+            ))}
+          </StaggerList>
+        )}
+      </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </div>
+  );
+}
 
-            {/* Main */}
-            <main className="max-w-6xl mx-auto px-6 py-14">
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-white/40 shrink-0">{label}</span>
+      <span className="font-medium text-white text-right truncate">{value}</span>
+    </div>
+  );
+}
 
-                {/* Header */}
-                <div className="flex items-center justify-between mb-10">
-
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            My Trips
-                        </h1>
-
-                        <p className="text-gray-500 mt-2">
-                            Manage and explore your trips.
-                        </p>
-                    </div>
-
-                    <Link
-                        href="/trips/create"
-                        className="rounded-xl bg-orange-500 hover:bg-orange-600
-                        px-6 py-3 text-sm font-semibold text-white transition-colors"
-                    >
-                        + Create Trip
-                    </Link>
-
-                </div>
-
-                {/* Loading */}
-                {loading && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-                        <p className="text-gray-500">
-                            Loading your trips...
-                        </p>
-                    </div>
-                )}
-
-                {/* Error */}
-                {!loading && error && (
-                    <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-12 text-center">
-
-                        <p className="text-red-500 mb-5">
-                            {error}
-                        </p>
-
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="rounded-xl bg-orange-500 px-6 py-3
-                            text-sm font-semibold text-white hover:bg-orange-600"
-                        >
-                            Try Again
-                        </button>
-
-                    </div>
-                )}
-
-                {/* No trips */}
-                {!loading && !error && trips.length === 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-
-                        <div
-                            className="w-16 h-16 rounded-full bg-orange-50
-                            flex items-center justify-center mx-auto mb-5"
-                        >
-                            <svg
-                                viewBox="0 0 24 24"
-                                className="h-8 w-8 text-orange-500"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={1.5}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12
-                                    59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-                                />
-                            </svg>
-                        </div>
-
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                            No trips yet
-                        </h2>
-
-                        <p className="text-gray-500 text-sm mb-8">
-                            Start planning your first trip with TripNest.
-                        </p>
-
-                        <Link
-                            href="/trips/create"
-                            className="inline-block rounded-xl bg-orange-500
-                            hover:bg-orange-600 px-7 py-3
-                            text-sm font-semibold text-white"
-                        >
-                            Create Your First Trip
-                        </Link>
-
-                    </div>
-                )}
-
-                {/* Trips */}
-                {!loading && !error && trips.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-                        {trips.map((trip) => (
-                            <div
-                                key={trip.id}
-                                className="bg-white rounded-2xl border border-gray-100
-                                shadow-sm overflow-hidden"
-                            >
-
-                                {/* Card header */}
-                                <div className="bg-orange-50 px-7 py-6">
-
-                                    <div className="flex items-center justify-between">
-
-                                        <span className="text-sm font-semibold uppercase tracking-wide text-orange-500">
-                                            {trip.status || "PLANNED"}
-                                        </span>
-
-                                        <span className="text-sm text-gray-400">
-                                            #{trip.id}
-                                        </span>
-
-                                    </div>
-
-                                    <h2 className="text-xl font-bold text-gray-900 mt-3">
-                                        {trip.title}
-                                    </h2>
-
-                                </div>
-
-                                {/* Card body */}
-                                <div className="px-7 py-6">
-
-                                    <div className="space-y-4">
-
-                                        {/* Destination */}
-                                        <div className="flex justify-between gap-4">
-                                            <span className="text-sm text-gray-400">
-                                                Destination
-                                            </span>
-
-                                            <span className="text-sm font-medium text-gray-900 text-right">
-                                                {trip.destinationName || "Not specified"}
-                                            </span>
-                                        </div>
-
-                                        {/* Start */}
-                                        <div className="flex justify-between gap-4">
-                                            <span className="text-sm text-gray-400">
-                                                Start
-                                            </span>
-
-                                            <span className="text-sm font-medium text-gray-900">
-                                                {trip.startDate || "Not specified"}
-                                            </span>
-                                        </div>
-
-                                        {/* End */}
-                                        <div className="flex justify-between gap-4">
-                                            <span className="text-sm text-gray-400">
-                                                End
-                                            </span>
-
-                                            <span className="text-sm font-medium text-gray-900">
-                                                {trip.endDate || "Not specified"}
-                                            </span>
-                                        </div>
-
-                                        {/* Budget */}
-                                        <div className="flex justify-between gap-4">
-                                            <span className="text-sm text-gray-400">
-                                                Budget
-                                            </span>
-
-                                            <span className="text-sm font-medium text-gray-900">
-                                                {trip.budget !== null &&
-                                                trip.budget !== undefined
-                                                    ? `₹${trip.budget}`
-                                                    : "Not specified"}
-                                            </span>
-                                        </div>
-
-                                    </div>
-
-                                    {/* Description */}
-                                    {trip.description && (
-                                        <p className="mt-5 text-sm text-gray-600 line-clamp-2">
-                                            {trip.description}
-                                        </p>
-                                    )}
-
-                                    {/* View Trip */}
-                                    <Link
-                                        href={`/trips/${trip.id}`}
-                                        className="block mt-6 w-full rounded-xl border-2
-                                        border-orange-500 px-5 py-3 text-center
-                                        text-sm font-semibold text-orange-500
-                                        hover:bg-orange-500 hover:text-white
-                                        transition-colors"
-                                    >
-                                        View Trip
-                                    </Link>
-
-                                </div>
-                            </div>
-                        ))}
-
-                    </div>
-                )}
-
-            </main>
-        </div>
-    );
+function TripIcon({ name, className }: { name: "plane" | "warning"; className: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {name === "plane" ? (
+        <path d="m3 11 18-7-7 18-2.5-8.5L3 11Zm8.5 2.5L21 4" />
+      ) : (
+        <><path d="m12 3 9 16H3L12 3Z" /><path d="M12 9v4M12 16h.01" /></>
+      )}
+    </svg>
+  );
 }
 
 export default function TripsPage() {
-    return (
-        <ProtectedRoute>
-            <TripsContent />
-        </ProtectedRoute>
-    );
+  return <ProtectedRoute><TripsContent /></ProtectedRoute>;
 }

@@ -1,32 +1,3 @@
-<<<<<<< HEAD
-import { AuthResponse, LoginRequest, RegisterRequest, TripResponse } from "./types";
-
-const BASE_URL = "http://localhost:8081";
-
-async function request<T>(endpoint: string, options: RequestInit, token?: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.message || data?.error || `Error ${res.status}`);
-  return data as T;
-}
-
-export const authApi = {
-  register: (body: RegisterRequest) =>
-    request<AuthResponse>("/api/auth/register", { method: "POST", body: JSON.stringify(body) }),
-  login: (body: LoginRequest) =>
-    request<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
-};
-
-export const tripApi = {
-  listMyTrips: (token: string) =>
-    request<TripResponse[]>("/api/trips", { method: "GET" }, token),
-=======
 import {
     AuthResponse,
     LoginRequest,
@@ -35,6 +6,9 @@ import {
     TripResponse,
     UserResponse,
     UpdateUserRequest,
+    Destination,
+    UserSummaryResponse,
+    AdminStatsResponse,
 } from "./types";
 import { getUser } from "./auth";
 
@@ -47,9 +21,9 @@ async function request<T>(
 
     const user = getUser();
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...((options.headers as Record<string, string>) || {}),
     };
 
     // Attach JWT token for protected backend APIs
@@ -62,7 +36,7 @@ async function request<T>(
         headers,
     });
 
-    const data = await res.json();
+    const data = res.status === 204 ? undefined : await res.json();
 
     if (!res.ok) {
         const msg =
@@ -94,7 +68,6 @@ export const authApi = {
             method: "POST",
             body: JSON.stringify(body),
         }),
->>>>>>> origin/intern_saisushma
 };
 
 
@@ -205,4 +178,30 @@ export const destinationApi = {
                 method: "GET",
             }
         ),
+};
+
+// =========================
+// ADMIN API
+// =========================
+export const adminApi = {
+    getDashboard: () =>
+        request<string>("/api/admin/dashboard", {
+            method: "GET",
+        }),
+
+    getStats: () =>
+        request<AdminStatsResponse>("/api/admin/stats", {
+            method: "GET",
+        }),
+
+    getUsers: () =>
+        request<UserSummaryResponse[]>("/api/admin/users", {
+            method: "GET",
+        }),
+
+    updateUserRole: (id: number, roleName: string) =>
+        request<UserSummaryResponse>(`/api/admin/users/${id}/role`, {
+            method: "PUT",
+            body: JSON.stringify({ roleName }),
+        }),
 };

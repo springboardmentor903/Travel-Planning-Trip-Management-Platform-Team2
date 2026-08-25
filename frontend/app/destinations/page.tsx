@@ -1,712 +1,349 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { destinationApi } from "@/lib/api";
-import { Destination } from "@/lib/types";
+import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Navbar from "@/components/Navbar";
+import { Destination, NominatimResult, WeatherData } from "@/lib/types";
+import apiClient from "@/lib/apiClient";
+import FadeIn from "@/components/ui/FadeIn";
+import { StaggerList, StaggerItem } from "@/components/ui/StaggerList";
 
-interface NominatimResult {
-    place_id: number;
-    lat: string;
-    lon: string;
-    name: string;
-    display_name: string;
-    type?: string;
+function Orbs() {
+  return (
+    <div className="glass-orbs pointer-events-none">
+      <motion.div
+        className="glass-orb glass-orb--orange"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--violet"
+        animate={{ x: [0, -25, 0], y: [0, 20, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--cyan"
+        animate={{ x: [0, 20, 0], y: [0, 25, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
 }
 
-interface WeatherData {
-    main?: {
-        temp?: number;
-        humidity?: number;
-    };
+function DestinationsContent() {
+  const [allDestinations, setAllDestinations] = useState<Destination[]>([]);
+  const [popularDestinations, setPopularDestinations] = useState<Destination[]>([]);
+  const [loadingDB, setLoadingDB] = useState(true);
+  const [dbError, setDbError] = useState("");
 
-    weather?: {
-        description?: string;
-        icon?: string;
-    }[];
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
 
-    wind?: {
-        speed?: number;
-    };
+  const [weather, setWeather] = useState<Record<number, WeatherData>>({});
+  const [weatherErrors, setWeatherErrors] = useState<Record<number, string>>({});
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      apiClient.get<Destination[]>("/api/destinations"),
+      apiClient.get<Destination[]>("/api/destinations/popular"),
+    ])
+      .then(([all, popular]) => {
+        setAllDestinations(all.data);
+        setPopularDestinations(popular.data);
+      })
+      .catch(() => setDbError("Failed to load destinations."))
+      .finally(() => setLoadingDB(false));
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim()) { setSearchResults([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const res = await apiClient.get<NominatimResult[]>("/api/destinations/search", { params: { query: query.trim() } });
+        const results = res.data;
+        setSearchResults(results);
+        results.forEach((result) => {
+          apiClient.get<WeatherData>("/api/destinations/weather", {
+            params: { lat: parseFloat(result.lat), lon: parseFloat(result.lon) },
+          }).then((wRes) => {
+            setWeather((prev) => ({ ...prev, [result.place_id]: wRes.data }));
+          }).catch(() => {
+            setWeatherErrors((prev) => ({ ...prev, [result.place_id]: "Weather unavailable." }));
+          });
+        });
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
+    }, 500);
+  }, [query]);
+
+  async function loadWeather(result: NominatimResult) {
+    setWeatherErrors((prev) => ({ ...prev, [result.place_id]: "" }));
+    try {
+      const res = await apiClient.get<WeatherData>("/api/destinations/weather", {
+        params: { lat: parseFloat(result.lat), lon: parseFloat(result.lon) },
+      });
+      setWeather((prev) => ({ ...prev, [result.place_id]: res.data }));
+    } catch {
+      setWeatherErrors((prev) => ({ ...prev, [result.place_id]: "Unable to load weather for this location." }));
+    }
+  }
+
+  void loadWeather;
+
+  const showSearch = query.trim().length > 0;
+
+  return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar />
+
+      <main className="glass-content relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
+
+        <FadeIn direction="down">
+          <div className="mb-8">
+            <h1 className="glass-h1">Destinations</h1>
+            <p className="glass-sub mt-1">
+              Browse our curated destinations or search anywhere in the world.
+            </p>
+          </div>
+        </FadeIn>
+
+        <div className="relative mb-10">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none">🔍</span>
+          <input
+            type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search any city, country, or place…"
+            className="glass-input pl-11 pr-5 py-3.5"
+          />
+        </div>
+
+        {showSearch && (
+          <section className="mb-12">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-4">
+              Search Results{" "}
+              {!searching && searchResults.length > 0 && (
+                <span className="text-sm font-normal text-white/50 ml-1">({searchResults.length} found)</span>
+              )}
+            </h2>
+
+            {searching && (
+              <div className="glass-card p-10 text-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-[3px] border-orange-400 border-t-transparent mx-auto mb-3" />
+                <p className="text-white/60 text-sm">Searching OpenStreetMap…</p>
+              </div>
+            )}
+
+            {!searching && searchResults.length === 0 && (
+              <div className="glass-card p-10 text-center">
+                <p className="text-white/40 text-sm">No locations found. Try a different search term.</p>
+              </div>
+            )}
+
+            {!searching && searchResults.length > 0 && (
+              <StaggerList className="space-y-4">
+                {searchResults.map((result) => {
+                  const w = weather[result.place_id];
+                  const wErr = weatherErrors[result.place_id];
+                  const isLoadingW = !w && !wErr;
+                  return (
+                    <StaggerItem key={result.place_id}>
+                      <div className="glass-card-md p-6">
+                        <div className="flex items-start gap-3 mb-4">
+                          <span className="text-2xl mt-0.5">📍</span>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-white">
+                              {result.name ?? result.display_name.split(",")[0]}
+                            </h3>
+                            <p className="text-sm text-white/60 mt-0.5 line-clamp-1">{result.display_name}</p>
+                            <div className="flex gap-4 mt-1 text-xs text-white/40">
+                              <span>Lat: {parseFloat(result.lat).toFixed(4)}</span>
+                              <span>Lon: {parseFloat(result.lon).toFixed(4)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isLoadingW && !wErr && (
+                          <div className="flex items-center gap-2 text-sm text-white/50 glass-form-sheet px-4 py-3">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-400 border-t-transparent" />
+                            Loading weather…
+                          </div>
+                        )}
+
+                        {wErr && (
+                          <div className="glass-banner glass-banner--error text-xs">
+                            <span>⚠️</span>
+                            <span>{wErr}</span>
+                          </div>
+                        )}
+
+                        {w && (
+                          <div>
+                            {w.weather?.[0] && (
+                              <div className="flex items-center gap-3 bg-gradient-to-r from-orange-500/15 to-amber-500/10 rounded-xl px-4 py-3 mb-3 border border-white/10 backdrop-blur-sm">
+                                {w.weather[0].icon && (
+                                  <img src={`https://openweathermap.org/img/wn/${w.weather[0].icon}.png`} alt="" className="w-10 h-10" />
+                                )}
+                                <div>
+                                  <p className="font-bold text-white text-lg">
+                                    {w.main?.temp != null ? `${w.main.temp.toFixed(1)}°C` : "N/A"}
+                                  </p>
+                                  <p className="text-sm text-white/70 capitalize">{w.weather[0].description}</p>
+                                </div>
+                                <div className="ml-auto text-right text-xs text-white/60">
+                                  <p>Humidity: {w.main?.humidity ?? "N/A"}%</p>
+                                  <p>Wind: {w.wind?.speed ?? "N/A"} m/s</p>
+                                </div>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <WeatherCard label="Temperature" value={w.main?.temp != null ? `${w.main.temp.toFixed(1)}°C` : "N/A"} icon="🌡️" />
+                              <WeatherCard label="Feels Like" value={w.main?.feels_like != null ? `${w.main.feels_like.toFixed(1)}°C` : "N/A"} icon="🤔" />
+                              <WeatherCard label="Humidity" value={w.main?.humidity != null ? `${w.main.humidity}%` : "N/A"} icon="💧" />
+                              <WeatherCard label="Wind" value={w.wind?.speed != null ? `${w.wind.speed} m/s` : "N/A"} icon="💨" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </StaggerItem>
+                  );
+                })}
+              </StaggerList>
+            )}
+          </section>
+        )}
+
+        {!showSearch && (
+          <section className="mb-12">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="glass-icon-chip">
+                <span className="text-sm">⭐</span>
+                <span className="text-sm font-semibold text-white/90">Popular Destinations</span>
+              </div>
+            </div>
+            {loadingDB ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="glass-card-md h-64 animate-pulse" />
+                ))}
+              </div>
+            ) : dbError ? (
+              <p className="text-red-400 text-sm">{dbError}</p>
+            ) : popularDestinations.length === 0 ? (
+              <p className="text-white/40 text-sm">No destinations in the database yet.</p>
+            ) : (
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {popularDestinations.map((d) => (
+                  <StaggerItem key={d.id}>
+                    <DestCard destination={d} />
+                  </StaggerItem>
+                ))}
+              </StaggerList>
+            )}
+          </section>
+        )}
+
+        <section>
+          <div className="flex items-center gap-2 mb-5">
+            <div className="glass-icon-chip">
+              <span className="text-sm">🌍</span>
+              <span className="text-sm font-semibold text-white/90">
+                {showSearch ? "Saved Destinations" : "All Destinations"}
+              </span>
+            </div>
+          </div>
+          {loadingDB ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="glass-card-md h-64 animate-pulse" />
+              ))}
+            </div>
+          ) : allDestinations.length === 0 ? (
+            <div className="glass-card p-10 text-center">
+              <p className="text-white/40 text-sm">No destinations found in the database.</p>
+            </div>
+          ) : (
+            <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {allDestinations.map((d) => (
+                <StaggerItem key={d.id}>
+                  <DestCard destination={d} />
+                </StaggerItem>
+              ))}
+            </StaggerList>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function DestCard({ destination }: { destination: Destination }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  return (
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.15 }}
+      className="glass-card-md overflow-hidden flex flex-col group"
+    >
+      <div className="relative w-full h-44 overflow-hidden bg-gradient-to-br from-orange-500/15 to-amber-500/5 border-b border-white/10">
+        {!imgLoaded && !imgError && (
+          <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/[0.02] to-white/5 animate-pulse" />
+        )}
+        {!imgError && destination.imageUrl ? (
+          <img
+            src={destination.imageUrl}
+            alt={destination.name}
+            loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgError(true)}
+            className={`w-full h-full object-cover group-hover:scale-[1.03] transition-all duration-500
+                        ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-5xl opacity-80">🌍</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/70 via-transparent to-transparent pointer-events-none" />
+      </div>
+      <div className="p-5 flex flex-col flex-1">
+        <h3 className="text-base font-bold text-white group-hover:text-orange-400 transition-colors">{destination.name}</h3>
+        <p className="text-sm text-white/60 mt-0.5">
+          {destination.city}{destination.city && destination.country ? ", " : ""}{destination.country}
+        </p>
+        {destination.description && (
+          <p className="text-sm text-white/70 mt-3 line-clamp-2 flex-1 leading-relaxed">{destination.description}</p>
+        )}
+        <Link
+          href={`/destinations/${destination.id}`}
+          className="glass-btn-outline mt-4 px-4 py-2.5 text-sm font-semibold text-center"
+        >
+          View Details
+        </Link>
+      </div>
+    </motion.div>
+  );
+}
+
+function WeatherCard({ label, value, icon }: { label: string; value: string; icon: string }) {
+  return (
+    <div className="glass-card-md p-3.5 text-center">
+      <p className="text-lg">{icon}</p>
+      <p className="text-xs text-white/60 mt-1 font-medium">{label}</p>
+      <p className="text-sm font-bold text-white mt-0.5">{value}</p>
+    </div>
+  );
 }
 
 export default function DestinationsPage() {
-
-    const router = useRouter();
-
-    const [destinations, setDestinations] =
-        useState<Destination[]>([]);
-
-    const [search, setSearch] = useState("");
-
-    const [searchResults, setSearchResults] =
-        useState<NominatimResult[]>([]);
-
-    const [searching, setSearching] =
-        useState(false);
-
-    const [loading, setLoading] =
-        useState(true);
-
-    const [error, setError] =
-        useState("");
-
-    // =========================
-    // WEATHER STATE
-    // =========================
-
-    const [weather, setWeather] =
-        useState<Record<number, WeatherData>>({});
-
-    const [weatherLoading, setWeatherLoading] =
-        useState<number | null>(null);
-
-    const [weatherError, setWeatherError] =
-        useState<Record<number, string>>({});
-
-
-    // =========================
-    // LOAD DATABASE DESTINATIONS
-    // =========================
-
-    useEffect(() => {
-
-        async function loadDestinations() {
-
-            try {
-
-                const data =
-                    await destinationApi.getAll();
-
-                setDestinations(data);
-
-            } catch (err) {
-
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to load destinations"
-                );
-
-            } finally {
-
-                setLoading(false);
-            }
-        }
-
-        loadDestinations();
-
-    }, []);
-
-
-    // =========================
-    // SEARCH OPENSTREETMAP
-    // =========================
-
-    useEffect(() => {
-
-        if (!search.trim()) {
-
-            setSearchResults([]);
-
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-
-            try {
-
-                setSearching(true);
-
-                const results =
-                    await destinationApi.search(
-                        search.trim()
-                    );
-
-                setSearchResults(
-                    results as NominatimResult[]
-                );
-
-            } catch (err) {
-
-                console.error(
-                    "OpenStreetMap search failed:",
-                    err
-                );
-
-                setSearchResults([]);
-
-            } finally {
-
-                setSearching(false);
-            }
-
-        }, 500);
-
-        return () => clearTimeout(timer);
-
-    }, [search]);
-
-
-    // =========================
-    // GET WEATHER FOR OSM RESULT
-    // =========================
-
-    async function loadWeather(
-        result: NominatimResult
-    ) {
-
-        try {
-
-            setWeatherLoading(result.place_id);
-
-            setWeatherError((previous) => ({
-                ...previous,
-                [result.place_id]: ""
-            }));
-
-            const latitude =
-                parseFloat(result.lat);
-
-            const longitude =
-                parseFloat(result.lon);
-
-            const data =
-                await destinationApi.getWeatherByCoordinates(
-                    latitude,
-                    longitude
-                );
-
-            setWeather((previous) => ({
-                ...previous,
-                [result.place_id]:
-                    data as WeatherData
-            }));
-
-        } catch (err) {
-
-            console.error(
-                "Weather loading failed:",
-                err
-            );
-
-            setWeatherError((previous) => ({
-                ...previous,
-                [result.place_id]:
-                    err instanceof Error
-                        ? err.message
-                        : "Unable to load weather"
-            }));
-
-        } finally {
-
-            setWeatherLoading(null);
-        }
-    }
-
-
-    // =========================
-    // LOADING
-    // =========================
-
-    if (loading) {
-
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-
-                <p className="text-gray-500">
-                    Loading destinations...
-                </p>
-
-            </div>
-        );
-    }
-
-
-    // =========================
-    // ERROR
-    // =========================
-
-    if (error) {
-
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-
-                <div className="text-center">
-
-                    <h2 className="text-xl font-bold text-red-500">
-                        Failed to load destinations
-                    </h2>
-
-                    <p className="text-gray-500 mt-2">
-                        {error}
-                    </p>
-
-                </div>
-
-            </div>
-        );
-    }
-
-
-    // =========================
-    // PAGE
-    // =========================
-
-    return (
-
-        <div className="min-h-screen bg-[#f0f2f5]">
-
-
-            {/* =========================
-                NAVBAR
-            ========================= */}
-
-            <nav className="bg-white border-b border-gray-200 px-8 py-4">
-
-                <div className="max-w-6xl mx-auto">
-
-                    <button
-                        onClick={() =>
-                            router.push("/dashboard")
-                        }
-                        className="text-xl font-bold text-gray-900"
-                    >
-                        TripNest
-                        <span className="text-orange-500">
-                            .
-                        </span>
-                    </button>
-
-                </div>
-
-            </nav>
-
-
-            {/* =========================
-                MAIN
-            ========================= */}
-
-            <main className="max-w-6xl mx-auto px-6 py-10">
-
-
-                <h1 className="text-3xl font-bold text-gray-900">
-                    Destinations
-                </h1>
-
-
-                <p className="text-gray-500 mt-2">
-                    Explore destinations for your next trip.
-                </p>
-
-
-                {/* =========================
-                    SEARCH
-                ========================= */}
-
-                <div className="mt-6 mb-10">
-
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(e) =>
-                            setSearch(e.target.value)
-                        }
-                        placeholder="Search destinations, cities or countries..."
-                        className="w-full rounded-xl border border-gray-300 bg-white px-5 py-3 text-gray-900 outline-none focus:border-orange-500"
-                    />
-
-                </div>
-
-
-                {/* =========================
-                    OPENSTREETMAP RESULTS
-                ========================= */}
-
-                {search.trim() && (
-
-                    <section className="mb-10">
-
-
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                            Search Results
-                        </h2>
-
-
-                        {searching ? (
-
-                            <div className="bg-white rounded-xl p-6 text-center">
-
-                                <p className="text-gray-500">
-                                    Searching OpenStreetMap...
-                                </p>
-
-                            </div>
-
-                        ) : searchResults.length === 0 ? (
-
-                            <div className="bg-white rounded-xl p-6 text-center">
-
-                                <p className="text-gray-500">
-                                    No locations found.
-                                </p>
-
-                            </div>
-
-                        ) : (
-
-                            <div className="space-y-4">
-
-
-                                {searchResults.map(
-                                    (result) => {
-
-                                        const currentWeather =
-                                            weather[
-                                                result.place_id
-                                                ];
-
-                                        const currentWeatherError =
-                                            weatherError[
-                                                result.place_id
-                                                ];
-
-                                        return (
-
-                                            <div
-                                                key={
-                                                    result.place_id
-                                                }
-                                                className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm"
-                                            >
-
-
-                                                {/* LOCATION */}
-
-                                                <h3 className="text-lg font-semibold text-gray-900">
-                                                    {result.name ||
-                                                        "Unknown location"}
-                                                </h3>
-
-
-                                                <p className="text-sm text-gray-500 mt-1">
-                                                    {result.display_name}
-                                                </p>
-
-
-                                                {/* COORDINATES */}
-
-                                                <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-400">
-
-                                                    <span>
-                                                        Latitude:{" "}
-                                                        {
-                                                            result.lat
-                                                        }
-                                                    </span>
-
-                                                    <span>
-                                                        Longitude:{" "}
-                                                        {
-                                                            result.lon
-                                                        }
-                                                    </span>
-
-                                                </div>
-
-
-                                                {/* WEATHER BUTTON */}
-
-                                                <button
-                                                    onClick={() =>
-                                                        loadWeather(
-                                                            result
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        weatherLoading ===
-                                                        result.place_id
-                                                    }
-                                                    className="mt-4 rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                                                >
-
-                                                    {weatherLoading ===
-                                                    result.place_id
-                                                        ? "Loading Weather..."
-                                                        : currentWeather
-                                                            ? "Refresh Weather"
-                                                            : "View Live Weather"}
-
-                                                </button>
-
-
-                                                {/* WEATHER ERROR */}
-
-                                                {currentWeatherError && (
-
-                                                    <p className="mt-3 text-sm text-red-500">
-                                                        {
-                                                            currentWeatherError
-                                                        }
-                                                    </p>
-
-                                                )}
-
-
-                                                {/* WEATHER RESULT */}
-
-                                                {currentWeather && (
-
-                                                    <div className="mt-5 rounded-xl bg-orange-50 border border-orange-100 p-5">
-
-
-                                                        <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                                                            Live Weather
-                                                        </h4>
-
-
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-
-                                                            {/* TEMPERATURE */}
-
-                                                            <div className="bg-white rounded-lg p-4">
-
-                                                                <p className="text-sm text-gray-500">
-                                                                    Temperature
-                                                                </p>
-
-                                                                <p className="text-2xl font-bold text-gray-900 mt-1">
-
-                                                                    {currentWeather.main?.temp !==
-                                                                    undefined
-                                                                        ? `${currentWeather.main.temp.toFixed(
-                                                                            1
-                                                                        )}°C`
-                                                                        : "N/A"}
-
-                                                                </p>
-
-                                                            </div>
-
-
-                                                            {/* CONDITION */}
-
-                                                            <div className="bg-white rounded-lg p-4">
-
-                                                                <p className="text-sm text-gray-500">
-                                                                    Conditions
-                                                                </p>
-
-                                                                <p className="text-lg font-semibold text-gray-900 mt-1 capitalize">
-
-                                                                    {
-                                                                        currentWeather
-                                                                            .weather?.[0]
-                                                                            ?.description ||
-                                                                        "N/A"
-                                                                    }
-
-                                                                </p>
-
-                                                            </div>
-
-
-                                                            {/* HUMIDITY */}
-
-                                                            <div className="bg-white rounded-lg p-4">
-
-                                                                <p className="text-sm text-gray-500">
-                                                                    Humidity
-                                                                </p>
-
-                                                                <p className="text-2xl font-bold text-gray-900 mt-1">
-
-                                                                    {currentWeather.main?.humidity !==
-                                                                    undefined
-                                                                        ? `${currentWeather.main.humidity}%`
-                                                                        : "N/A"}
-
-                                                                </p>
-
-                                                            </div>
-
-
-                                                            {/* WIND */}
-
-                                                            <div className="bg-white rounded-lg p-4">
-
-                                                                <p className="text-sm text-gray-500">
-                                                                    Wind Speed
-                                                                </p>
-
-                                                                <p className="text-2xl font-bold text-gray-900 mt-1">
-
-                                                                    {currentWeather.wind?.speed !==
-                                                                    undefined
-                                                                        ? `${currentWeather.wind.speed} m/s`
-                                                                        : "N/A"}
-
-                                                                </p>
-
-                                                            </div>
-
-                                                        </div>
-
-                                                    </div>
-
-                                                )}
-
-                                            </div>
-
-                                        );
-
-                                    }
-                                )}
-
-                            </div>
-
-                        )}
-
-                    </section>
-
-                )}
-
-
-                {/* =========================
-                    DATABASE DESTINATIONS
-                ========================= */}
-
-                <section>
-
-
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">
-
-                        {search.trim()
-                            ? "Saved Destinations"
-                            : "Popular Destinations"}
-
-                    </h2>
-
-
-                    {destinations.length === 0 ? (
-
-                        <div className="bg-white rounded-xl p-8 text-center">
-
-                            <p className="text-gray-500">
-                                No destinations found.
-                            </p>
-
-                        </div>
-
-                    ) : (
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-
-
-                            {destinations.map(
-                                (destination) => (
-
-                                    <div
-                                        key={
-                                            destination.id
-                                        }
-                                        className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-                                    >
-
-
-                                        {/* IMAGE */}
-
-                                        {destination.imageUrl ? (
-
-                                            <img
-                                                src={
-                                                    destination.imageUrl
-                                                }
-                                                alt={
-                                                    destination.name
-                                                }
-                                                className="w-full h-48 object-cover"
-                                            />
-
-                                        ) : (
-
-                                            <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-
-                                                <span className="text-gray-400">
-                                                    No image
-                                                </span>
-
-                                            </div>
-
-                                        )}
-
-
-                                        {/* CONTENT */}
-
-                                        <div className="p-5">
-
-
-                                            <h2 className="text-xl font-bold text-gray-900">
-                                                {
-                                                    destination.name
-                                                }
-                                            </h2>
-
-
-                                            <p className="text-sm text-gray-500 mt-1">
-
-                                                {
-                                                    destination.city
-                                                }
-
-                                                {destination.city &&
-                                                destination.country
-                                                    ? ", "
-                                                    : ""}
-
-                                                {
-                                                    destination.country
-                                                }
-
-                                            </p>
-
-
-                                            <p className="text-sm text-gray-600 mt-4 line-clamp-3">
-                                                {
-                                                    destination.description
-                                                }
-                                            </p>
-
-
-                                            <button
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/destinations/${destination.id}`
-                                                    )
-                                                }
-                                                className="mt-5 rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                                            >
-                                                View Details
-                                            </button>
-
-
-                                        </div>
-
-                                    </div>
-
-                                )
-                            )}
-
-                        </div>
-
-                    )}
-
-                </section>
-
-
-            </main>
-
-        </div>
-    );
+  return <ProtectedRoute><DestinationsContent /></ProtectedRoute>;
 }

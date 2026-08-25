@@ -2,333 +2,276 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getTripById, Trip } from "@/lib/tripApi";
-import {
-    getItineraries,
-    createItinerary,
-    Itinerary,
-} from "@/lib/itineraryApi";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Navbar from "@/components/Navbar";
 import ActivitySection from "@/components/ActivitySection";
-export default function TripDetailsPage() {
-    const params = useParams();
-    const router = useRouter();
+import BudgetExpenseSection from "@/components/BudgetExpenseSection";
+import { getTripById, deleteTrip } from "@/lib/tripApi";
+import { getItineraries, createItinerary } from "@/lib/itineraryApi";
+import { TripResponse, ItineraryResponse } from "@/lib/types";
+import FadeIn from "@/components/ui/FadeIn";
+import { StaggerList, StaggerItem } from "@/components/ui/StaggerList";
+import { ToastContainer } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 
-    const [trip, setTrip] = useState<Trip | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const [itineraries, setItineraries] = useState<Itinerary[]>([]);
-    const [addingDay, setAddingDay] = useState(false);
-    const [itineraryError, setItineraryError] = useState("");
+const STATUS_PILL: Record<string, string> = {
+  PLANNED: "glass-pill glass-pill--planned",
+  ONGOING: "glass-pill glass-pill--ongoing",
+  COMPLETED: "glass-pill glass-pill--completed",
+  CANCELLED: "glass-pill glass-pill--cancelled",
+};
 
-    useEffect(() => {
-        async function loadTrip() {
-            try {
-                setLoading(true);
-                setError("");
+function Orbs() {
+  return (
+    <div className="glass-orbs pointer-events-none">
+      <motion.div
+        className="glass-orb glass-orb--orange"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--violet"
+        animate={{ x: [0, -25, 0], y: [0, 20, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--cyan"
+        animate={{ x: [0, 20, 0], y: [0, 25, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
 
-                const id = Number(params.id);
+function TripDetailContent() {
+  const params = useParams();
+  const router = useRouter();
+  const id = Number(params.id);
+  const { toasts, addToast, removeToast } = useToast();
 
-                if (isNaN(id)) {
-                    setError("Invalid trip ID.");
-                    return;
-                }
+  const [trip, setTrip] = useState<TripResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
-                const data = await getTripById(id);
-                setTrip(data);
-                const itineraryData = await getItineraries(id);
-                setItineraries(itineraryData);
-            } catch (err) {
-                console.error(err);
-                setError("Unable to load trip details.");
-            } finally {
-                setLoading(false);
-            }
-        }
+  const [itineraries, setItineraries] = useState<ItineraryResponse[]>([]);
+  const [addingDay, setAddingDay] = useState(false);
+  const [itineraryError, setItineraryError] = useState("");
 
-        loadTrip();
-    }, [params.id]);
-
-    if (loading) {
-        return (
-            <main className="min-h-screen bg-[#f0f2f5] px-6 py-10">
-                <div className="max-w-4xl mx-auto bg-white rounded-2xl p-10 text-center">
-                    <p className="text-gray-500">
-                        Loading trip details...
-                    </p>
-                </div>
-            </main>
-        );
+  useEffect(() => {
+    async function load() {
+      try {
+        const [tripData, itin] = await Promise.all([
+          getTripById(id),
+          getItineraries(id),
+        ]);
+        setTrip(tripData);
+        setItineraries(itin);
+      } catch {
+        setError("Unable to load trip details.");
+      } finally {
+        setLoading(false);
+      }
     }
-    async function handleAddDay() {
-        if (!trip) return;
+    if (!isNaN(id)) load();
+  }, [id]);
 
-        try {
-            setAddingDay(true);
-            setItineraryError("");
-
-            // Use the trip start date as Day 1
-            const startDate = new Date(trip.startDate);
-
-            // Add one day for every existing itinerary day
-            startDate.setDate(
-                startDate.getDate() + itineraries.length
-            );
-
-            const dayDate = startDate.toISOString().split("T")[0];
-
-            const newDay = await createItinerary(
-                trip.id,
-                dayDate
-            );
-
-            setItineraries((current) => [...current, newDay]);
-        } catch (err) {
-            console.error(err);
-            setItineraryError("Unable to add itinerary day.");
-        } finally {
-            setAddingDay(false);
-        }
+  async function handleAddDay() {
+    if (!trip) return;
+    try {
+      setAddingDay(true); setItineraryError("");
+      const base = trip.startDate ? new Date(trip.startDate) : new Date();
+      base.setDate(base.getDate() + itineraries.length);
+      const dayDate = base.toISOString().split("T")[0];
+      const newDay = await createItinerary(id, dayDate);
+      setItineraries((prev) => [...prev, newDay]);
+      addToast("Day added", "success");
+    } catch {
+      setItineraryError("Unable to add day. Please try again.");
+    } finally {
+      setAddingDay(false);
     }
+  }
 
-    if (error || !trip) {
-        return (
-            <main className="min-h-screen bg-[#f0f2f5] px-6 py-10">
-                <div className="max-w-4xl mx-auto bg-white rounded-2xl p-10 text-center">
-                    <p className="text-red-500 mb-5">
-                        {error || "Trip not found."}
-                    </p>
-
-                    <button
-                        onClick={() => router.push("/dashboard")}
-                        className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
-                    >
-                        Back to My Trips
-                    </button>
-                </div>
-            </main>
-        );
+  async function handleDeleteTrip() {
+    if (!confirm("Delete this trip and all its data? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteTrip(id);
+      addToast("Trip deleted", "info");
+      router.push("/trips");
+    } catch {
+      alert("Failed to delete trip.");
+      setDeleting(false);
     }
+  }
 
-    return (
-        <main className="min-h-screen bg-[#f0f2f5]">
+  if (loading) return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/trips" backLabel="My Trips" />
+      <div className="glass-content relative max-w-4xl mx-auto px-6 py-16 text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-orange-400 border-t-transparent mx-auto mb-4" />
+        <p className="text-white/60 text-sm">Loading trip details…</p>
+      </div>
+    </div>
+  );
 
-            {/* Navbar */}
-            <nav className="bg-white border-b border-gray-200 px-8 py-4">
-                <div className="max-w-6xl mx-auto flex items-center justify-between">
+  if (error || !trip) return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/trips" backLabel="My Trips" />
+      <div className="glass-content relative max-w-4xl mx-auto px-6 py-16 text-center">
+        <div className="glass-card p-12">
+          <p className="text-red-400 mb-6 text-sm">{error ?? "Trip not found."}</p>
+          <Link
+            href="/trips"
+            className="glass-btn-primary inline-flex items-center justify-center px-6 py-3"
+          >
+            Back to My Trips
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 
-                    <button
-                        onClick={() => router.push("/dashboard")}
-                        className="text-xl font-bold text-gray-900"
-                    >
-                        TripNest
-                        <span className="text-orange-500">.</span>
-                    </button>
+  return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/trips" backLabel="My Trips" />
 
-                    <button
-                        onClick={() => router.push("/dashboard")}
-                        className="text-sm text-gray-600 hover:text-orange-500"
-                    >
-                        ← Back to My Trips
-                    </button>
-                    <button
-                        onClick={() => router.push(`/trips/${trip.id}/edit`)}
-                        className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
-                    >
-                        Edit Trip
-                    </button>
+      <FadeIn>
+        <main className="glass-content relative max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
 
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div>
+              <span className={STATUS_PILL[trip.status] ?? "glass-pill glass-pill--default"}>
+                {trip.status}
+              </span>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mt-2 leading-snug">{trip.title}</h1>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Link
+                href={`/trips/${id}/edit`}
+                className="glass-btn-ghost px-4 py-2"
+              >
+                Edit
+              </Link>
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={handleDeleteTrip} disabled={deleting}
+                className="glass-btn-danger px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </motion.button>
+            </div>
+          </div>
+
+          <div className="glass-card p-7 sm:p-8">
+            <div className="glass-icon-chip mb-5">
+              <span className="text-sm">📋</span>
+              <span className="text-sm font-semibold text-white/90">Trip Details</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <InfoRow label="Destination" value={trip.destinationName ?? "Not specified"} />
+              <InfoRow label="Owner" value={trip.ownerName} />
+              <InfoRow label="Start Date" value={trip.startDate ?? "Not specified"} />
+              <InfoRow label="End Date" value={trip.endDate ?? "Not specified"} />
+              <InfoRow label="Budget" value={trip.budget != null ? `₹${trip.budget.toLocaleString()}` : "Not specified"} />
+              <InfoRow label="Created" value={new Date(trip.createdAt).toLocaleDateString()} />
+            </div>
+            {trip.description && (
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <p className="glass-label mb-2">Description</p>
+                <p className="text-white/80 leading-relaxed text-sm">{trip.description}</p>
+              </div>
+            )}
+          </div>
+
+          <BudgetExpenseSection tripId={id} />
+
+          <div className="glass-card p-7 sm:p-8">
+            <div className="flex items-center justify-between mb-2">
+              <div className="glass-icon-chip">
+                <span className="text-sm">🗓️</span>
+                <div>
+                  <span className="block text-sm font-semibold text-white/90">Itinerary</span>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    {itineraries.length === 0
+                      ? "No days planned yet."
+                      : `${itineraries.length} day${itineraries.length > 1 ? "s" : ""} planned.`}
+                  </p>
                 </div>
-            </nav>
-
-            {/* Main content */}
-            <div className="max-w-4xl mx-auto px-6 py-10">
-
-                {/* Heading */}
-                <div className="mb-8">
-
-                    <div className="flex items-center justify-between">
-
-                        <div>
-                            <p className="text-sm font-semibold uppercase tracking-wider text-orange-500">
-                                {trip.status}
-                            </p>
-
-                            <h1 className="text-4xl font-bold text-gray-900 mt-2">
-                                {trip.title}
-                            </h1>
-                        </div>
-
-                        <span className="text-sm text-gray-400">
-                            Trip #{trip.id}
-                        </span>
-
-                    </div>
-
-                </div>
-
-                {/* Trip information */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-
-                    <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                        Trip Details
-                    </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                        {/* Destination */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                Destination
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.destinationName || "Not specified"}
-                            </p>
-                        </div>
-
-                        {/* Owner */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                Created by
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.ownerName}
-                            </p>
-                        </div>
-
-                        {/* Start date */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                Start Date
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.startDate || "Not specified"}
-                            </p>
-                        </div>
-
-                        {/* End date */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                End Date
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.endDate || "Not specified"}
-                            </p>
-                        </div>
-
-                        {/* Budget */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                Budget
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.budget !== null
-                                    ? `₹${trip.budget}`
-                                    : "Not specified"}
-                            </p>
-                        </div>
-
-                        {/* Created date */}
-                        <div>
-                            <p className="text-sm text-gray-400">
-                                Created At
-                            </p>
-
-                            <p className="mt-1 font-medium text-gray-900">
-                                {trip.createdAt}
-                            </p>
-                        </div>
-
-                    </div>
-
-                    {/* Description */}
-                    {trip.description && (
-                        <div className="mt-8 pt-6 border-t border-gray-100">
-
-                            <p className="text-sm text-gray-400">
-                                Description
-                            </p>
-
-                            <p className="mt-2 text-gray-700 leading-relaxed">
-                                {trip.description}
-                            </p>
-
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Itinerary placeholder */}
-                {/* Itinerary */}
-                <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-
-                    <div className="flex items-center justify-between">
-
-                        <div>
-                            <h2 className="text-xl font-semibold text-gray-900">
-                                Itinerary
-                            </h2>
-
-                            <p className="text-gray-500 mt-1">
-                                Plan your trip day by day.
-                            </p>
-                        </div>
-
-                        <button
-                            onClick={handleAddDay}
-                            disabled={addingDay}
-                            className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-                        >
-                            {addingDay ? "Adding..." : "+ Add Day"}
-                        </button>
-
-                    </div>
-
-                    {itineraryError && (
-                        <p className="text-red-500 text-sm mt-4">
-                            {itineraryError}
-                        </p>
-                    )}
-
-                    {itineraries.length === 0 && !itineraryError && (
-                        <div className="mt-6 rounded-xl bg-gray-50 p-6 text-center">
-                            <p className="text-gray-500">
-                                No itinerary days yet.
-                            </p>
-                        </div>
-                    )}
-
-                    {itineraries.length > 0 && (
-                        <div className="mt-6 space-y-4">
-
-                            {itineraries.map((day) => (
-                                <div
-                                    key={day.id}
-                                    className="border border-gray-200 rounded-xl p-5"
-                                >
-                                    <h3 className="text-lg font-semibold text-gray-900">
-                                        Day {itineraries.indexOf(day) + 1}
-                                    </h3>
-
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        {day.dayDate}
-                                    </p>
-
-                                    <ActivitySection itineraryId={day.id} />
-                                </div>
-                            ))}
-
-                        </div>
-                    )}
-
-                </div>
-
+              </div>
+              <button
+                onClick={handleAddDay} disabled={addingDay}
+                className="glass-btn-primary px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addingDay ? "Adding…" : "+ Add Day"}
+              </button>
             </div>
 
+            {itineraryError && (
+              <div className="glass-banner glass-banner--error mt-3">
+                <span>⚠️</span>
+                <span>{itineraryError}</span>
+              </div>
+            )}
+
+            {itineraries.length === 0 && !itineraryError && (
+              <div className="mt-6 rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center">
+                <p className="text-white/40 text-sm">Click &ldquo;+ Add Day&rdquo; to start building your itinerary.</p>
+              </div>
+            )}
+
+            {itineraries.length > 0 && (
+              <StaggerList className="mt-6 space-y-4">
+                {itineraries.map((day, index) => (
+                  <StaggerItem key={day.id}>
+                    <div className="glass-card-md overflow-hidden">
+                      <div className="px-5 py-3.5 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-orange-400">Day {index + 1}</span>
+                          <p className="text-sm font-semibold text-white mt-0.5">
+                            {new Date(day.dayDate + "T00:00:00").toLocaleDateString("en-IN", {
+                              weekday: "long", year: "numeric", month: "long", day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      {day.notes && (
+                        <p className="px-5 py-2.5 text-sm text-white/60 border-b border-white/10 bg-white/[0.015]">{day.notes}</p>
+                      )}
+                      <div className="px-5 py-4">
+                        <ActivitySection itineraryId={day.id} />
+                      </div>
+                    </div>
+                  </StaggerItem>
+                ))}
+              </StaggerList>
+            )}
+          </div>
         </main>
-    );
+      </FadeIn>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="glass-label">{label}</p>
+      <p className="text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+export default function TripDetailPage() {
+  return <ProtectedRoute><TripDetailContent /></ProtectedRoute>;
 }

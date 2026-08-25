@@ -3,13 +3,19 @@ package com.tripnest.tripnest_backend.service;
 import com.tripnest.tripnest_backend.dto.TripRequest;
 import com.tripnest.tripnest_backend.dto.TripResponse;
 import com.tripnest.tripnest_backend.entity.Destination;
+import com.tripnest.tripnest_backend.entity.Itinerary;
 import com.tripnest.tripnest_backend.entity.Trip;
 import com.tripnest.tripnest_backend.entity.User;
+import com.tripnest.tripnest_backend.repository.BudgetRepository;
+import com.tripnest.tripnest_backend.repository.ExpenseRepository;
+import com.tripnest.tripnest_backend.repository.ItineraryRepository;
+import com.tripnest.tripnest_backend.repository.ActivityRepository;
 import com.tripnest.tripnest_backend.repository.DestinationRepository;
 import com.tripnest.tripnest_backend.repository.TripRepository;
 import com.tripnest.tripnest_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -20,6 +26,10 @@ public class TripService {
     private final TripRepository tripRepository;
     private final UserRepository userRepository;
     private final DestinationRepository destinationRepository;
+        private final ExpenseRepository expenseRepository;
+        private final BudgetRepository budgetRepository;
+        private final ItineraryRepository itineraryRepository;
+        private final ActivityRepository activityRepository;
 
     public TripResponse create(TripRequest request, String email) {
 
@@ -119,7 +129,8 @@ public class TripService {
     }
 
 
-    public void delete(Long id, String email) {
+        @Transactional
+        public void delete(Long id, String email) {
 
         Trip trip = tripRepository.findById(id)
                 .orElseThrow(() ->
@@ -130,6 +141,15 @@ public class TripService {
         if (!trip.getUser().getEmail().equals(email)) {
             throw new RuntimeException("Access denied");
         }
+
+                expenseRepository.deleteByTripId(id);
+                budgetRepository.deleteByTripId(id);
+
+                List<Itinerary> itineraries = itineraryRepository.findByTripIdOrderByDayDateAsc(id);
+                for (Itinerary itinerary : itineraries) {
+                        activityRepository.deleteByItineraryId(itinerary.getId());
+                }
+                itineraryRepository.deleteByTripId(id);
 
         tripRepository.delete(trip);
     }

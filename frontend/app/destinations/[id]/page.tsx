@@ -1,267 +1,295 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { destinationApi } from "@/lib/api";
-import { Destination } from "@/lib/types";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Navbar from "@/components/Navbar";
+import { Destination, WeatherData } from "@/lib/types";
+import apiClient from "@/lib/apiClient";
+import FadeIn from "@/components/ui/FadeIn";
+import { StaggerList, StaggerItem } from "@/components/ui/StaggerList";
 
-export default function DestinationDetailsPage() {
-    const params = useParams();
-    const router = useRouter();
+function Orbs() {
+  return (
+    <div className="glass-orbs pointer-events-none">
+      <motion.div
+        className="glass-orb glass-orb--orange"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--violet"
+        animate={{ x: [0, -25, 0], y: [0, 20, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="glass-orb glass-orb--cyan"
+        animate={{ x: [0, 20, 0], y: [0, 25, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
 
-    const [destination, setDestination] = useState<Destination | null>(null);
-    const [weather, setWeather] = useState<Record<string, any> | null>(null);
+function DestinationDetailContent() {
+  const params = useParams();
+  const id = Number(params.id);
 
-    const [loading, setLoading] = useState(true);
-    const [weatherLoading, setWeatherLoading] = useState(true);
+  const [destination, setDestination] = useState<Destination | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [weatherError, setWeatherError] = useState("");
 
-    const [error, setError] = useState("");
-    const [weatherError, setWeatherError] = useState("");
+  useEffect(() => {
+    if (isNaN(id)) { setError("Invalid destination."); setLoading(false); return; }
 
-    useEffect(() => {
-        async function loadDestination() {
-            try {
-                const id = Number(params.id);
+    async function load() {
+      try {
+        const destRes = await apiClient.get<Destination>(`/api/destinations/${id}`);
+        setDestination(destRes.data);
 
-                if (isNaN(id)) {
-                    setError("Invalid destination ID.");
-                    return;
-                }
-
-                const data = await destinationApi.getById(id);
-                setDestination(data);
-
-                try {
-                    const weatherData = await destinationApi.getWeather(id);
-                    setWeather(weatherData);
-                } catch (err) {
-                    console.error(err);
-                    setWeatherError("Unable to load live weather.");
-                } finally {
-                    setWeatherLoading(false);
-                }
-
-            } catch (err) {
-                console.error(err);
-
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : "Unable to load destination."
-                );
-            } finally {
-                setLoading(false);
-            }
+        try {
+          const wRes = await apiClient.get<WeatherData>(`/api/destinations/${id}/weather`);
+          setWeather(wRes.data);
+        } catch (e: unknown) {
+          const axiosErr = e as {response?: {status?: number; data?: {message?: string; error?: string}}; message?: string};
+          const status = axiosErr?.response?.status;
+          const msg = axiosErr?.response?.data?.message
+                   || axiosErr?.response?.data?.error
+                   || axiosErr?.message
+                   || "Live weather unavailable.";
+          console.error("[Weather Error]", status, msg, e);
+          setWeatherError(`Weather error (${status ?? "network"}): ${msg}`);
+        } finally {
+          setWeatherLoading(false);
         }
-
-        loadDestination();
-    }, [params.id]);
-
-    if (loading) {
-        return (
-            <main className="min-h-screen bg-[#f0f2f5] flex items-center justify-center">
-                <p className="text-gray-500">
-                    Loading destination...
-                </p>
-            </main>
-        );
+      } catch {
+        setError("Destination not found.");
+      } finally {
+        setLoading(false);
+      }
     }
+    load();
+  }, [id]);
 
-    if (error || !destination) {
-        return (
-            <main className="min-h-screen bg-[#f0f2f5] flex items-center justify-center px-6">
-                <div className="bg-white rounded-2xl p-10 text-center">
-                    <p className="text-red-500 mb-5">
-                        {error || "Destination not found."}
-                    </p>
+  if (loading) return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/destinations" backLabel="Destinations" />
+      <div className="glass-content relative max-w-5xl mx-auto px-6 py-16 text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-orange-400 border-t-transparent mx-auto mb-4" />
+        <p className="text-white/60 text-sm">Loading destination…</p>
+      </div>
+    </div>
+  );
 
-                    <button
-                        onClick={() => router.push("/destinations")}
-                        className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
-                    >
-                        Back to Destinations
-                    </button>
+  if (error || !destination) return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/destinations" backLabel="Destinations" />
+      <div className="glass-content relative max-w-5xl mx-auto px-6 py-16 text-center">
+        <p className="text-red-400 text-base">{error || "Destination not found."}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="glass-canvas min-h-screen">
+      <Orbs />
+      <div className="glass-grain" />
+      <Navbar backHref="/destinations" backLabel="Destinations" />
+
+      <FadeIn>
+        <main className="glass-content relative max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+
+          <div className="glass-card overflow-hidden">
+            <div className="relative w-full h-72 bg-gradient-to-br from-orange-500/20 via-amber-500/10 to-rose-500/10 border-b border-white/10">
+              {destination.imageUrl && (
+                <HeroImage src={destination.imageUrl} alt={destination.name} />
+              )}
+              {!destination.imageUrl && (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Icon name="globe" className="h-20 w-20 text-white/70" />
                 </div>
-            </main>
-        );
-    }
-
-    return (
-        <main className="min-h-screen bg-[#f0f2f5]">
-
-            {/* Navbar */}
-            <nav className="bg-white border-b border-gray-200 px-8 py-4">
-                <div className="max-w-6xl mx-auto flex items-center justify-between">
-
-                    <button
-                        onClick={() => router.push("/dashboard")}
-                        className="text-xl font-bold text-gray-900"
-                    >
-                        TripNest
-                        <span className="text-orange-500">.</span>
-                    </button>
-
-                    <button
-                        onClick={() => router.push("/destinations")}
-                        className="text-sm font-medium text-gray-600 hover:text-orange-500"
-                    >
-                        ← Back to Destinations
-                    </button>
-
-                </div>
-            </nav>
-
-            {/* Main */}
-            <div className="max-w-5xl mx-auto px-6 py-10">
-
-                {/* Destination Header */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-
-                    {/* Image */}
-                    {destination.imageUrl ? (
-                        <img
-                            src={destination.imageUrl}
-                            alt={destination.name}
-                            className="w-full h-72 object-cover"
-                        />
-                    ) : (
-                        <div className="w-full h-72 bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-400 text-lg">
-                                No image available
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Destination information */}
-                    <div className="p-8">
-
-                        <h1 className="text-4xl font-bold text-gray-900">
-                            {destination.name}
-                        </h1>
-
-                        <p className="text-gray-500 mt-2 text-lg">
-                            {destination.city}
-                            {destination.city && destination.country
-                                ? ", "
-                                : ""}
-                            {destination.country}
-                        </p>
-
-                        {destination.description && (
-                            <div className="mt-6">
-                                <h2 className="text-xl font-semibold text-gray-900">
-                                    About this destination
-                                </h2>
-
-                                <p className="mt-3 text-gray-600 leading-relaxed">
-                                    {destination.description}
-                                </p>
-                            </div>
-                        )}
-
-                    </div>
-
-                </div>
-
-                {/* Weather */}
-                <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Live Weather
-                    </h2>
-
-                    <p className="text-gray-500 mt-1">
-                        Current weather information for {destination.name}.
-                    </p>
-
-                    {weatherLoading && (
-                        <div className="mt-6">
-                            <p className="text-gray-500">
-                                Loading live weather...
-                            </p>
-                        </div>
-                    )}
-
-                    {!weatherLoading && weatherError && (
-                        <div className="mt-6">
-                            <p className="text-red-500">
-                                {weatherError}
-                            </p>
-                        </div>
-                    )}
-
-                    {!weatherLoading && !weatherError && weather && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-
-                            {/* Temperature */}
-                            <div className="rounded-xl bg-orange-50 p-5">
-                                <p className="text-sm text-gray-500">
-                                    Temperature
-                                </p>
-
-                                <p className="text-2xl font-bold text-gray-900 mt-2">
-                                    {weather.temperature ??
-                                        weather.temp ??
-                                        weather.main?.temp ??
-                                        "N/A"}
-                                    {weather.temperature ||
-                                    weather.temp ||
-                                    weather.main?.temp
-                                        ? "°C"
-                                        : ""}
-                                </p>
-                            </div>
-
-                            {/* Humidity */}
-                            <div className="rounded-xl bg-orange-50 p-5">
-                                <p className="text-sm text-gray-500">
-                                    Humidity
-                                </p>
-
-                                <p className="text-2xl font-bold text-gray-900 mt-2">
-                                    {weather.humidity ??
-                                        weather.main?.humidity ??
-                                        "N/A"}
-                                    {weather.humidity ||
-                                    weather.main?.humidity
-                                        ? "%"
-                                        : ""}
-                                </p>
-                            </div>
-
-                            {/* Wind */}
-                            <div className="rounded-xl bg-orange-50 p-5">
-                                <p className="text-sm text-gray-500">
-                                    Wind Speed
-                                </p>
-
-                                <p className="text-2xl font-bold text-gray-900 mt-2">
-                                    {weather.windSpeed ??
-                                        weather.wind?.speed ??
-                                        "N/A"}
-                                </p>
-                            </div>
-
-                            {/* Description */}
-                            <div className="rounded-xl bg-orange-50 p-5">
-                                <p className="text-sm text-gray-500">
-                                    Conditions
-                                </p>
-
-                                <p className="text-lg font-semibold text-gray-900 mt-2">
-                                    {weather.description ??
-                                        weather.weather?.[0]?.description ??
-                                        "N/A"}
-                                </p>
-                            </div>
-
-                        </div>
-                    )}
-
-                </div>
-
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/95 via-[#0f172a]/20 to-transparent pointer-events-none" />
             </div>
 
+            <div className="p-7 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl sm:text-4xl font-bold text-white leading-snug">{destination.name}</h1>
+                  <p className="text-white/60 mt-1 text-base sm:text-lg">
+                    {destination.city}{destination.city && destination.country ? ", " : ""}{destination.country}
+                  </p>
+                </div>
+                <Link
+                  href={`/trips/create?destinationId=${destination.id}`}
+                  className="glass-btn-primary inline-flex items-center justify-center px-5 py-2.5 shrink-0"
+                >
+                  Create Trip
+                </Link>
+              </div>
+              {destination.description && (
+                <div className="mt-6">
+                  <div className="glass-icon-chip mb-3">
+                    <Icon name="book" className="h-4 w-4 text-orange-300" />
+                    <span className="text-sm font-semibold text-white/90">About {destination.name}</span>
+                  </div>
+                  <p className="text-white/80 leading-relaxed text-sm sm:text-base">{destination.description}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <StaggerList className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StaggerItem>
+              <InfoCard icon="city" label="City" value={destination.city || "—"} />
+            </StaggerItem>
+            <StaggerItem>
+              <InfoCard icon="globe" label="Country" value={destination.country || "—"} />
+            </StaggerItem>
+            <StaggerItem>
+              <InfoCard icon="id" label="Destination ID" value={`#${destination.id}`} />
+            </StaggerItem>
+          </StaggerList>
+
+          <div className="glass-card p-7 sm:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="glass-icon-chip">
+                <Icon name="cloud" className="h-5 w-5 text-sky-300" />
+                <div>
+                  <h2 className="text-lg font-bold text-white">Live Weather</h2>
+                  <p className="text-sm text-white/60">Current conditions in {destination.city || destination.name}</p>
+                </div>
+              </div>
+            </div>
+
+            {weatherLoading && (
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-orange-400 border-t-transparent" />
+                <p className="text-white/60 text-sm">Fetching live weather data…</p>
+              </div>
+            )}
+
+            {!weatherLoading && weatherError && (
+              <div className="glass-banner glass-banner--error">
+                <Icon name="warning" className="h-4 w-4 shrink-0" />
+                <span>{weatherError}</span>
+              </div>
+            )}
+
+            {!weatherLoading && !weatherError && weather && (
+              <div>
+                {weather.weather?.[0] && (
+                  <div className="flex items-center gap-4 mb-6 p-5 bg-gradient-to-r from-orange-500/15 to-amber-500/10 rounded-2xl border border-white/10 backdrop-blur-sm">
+                    {weather.weather[0].icon && (
+                      <img
+                        src={`https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`}
+                        alt="" className="w-16 h-16"
+                      />
+                    )}
+                    <div>
+                      <p className="text-3xl font-bold text-white">
+                        {weather.main?.temp != null ? `${weather.main.temp.toFixed(1)}°C` : "N/A"}
+                      </p>
+                      <p className="text-white/70 capitalize mt-0.5 text-sm">{weather.weather[0].description}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <WeatherCard icon="temperature" label="Temperature" value={weather.main?.temp != null ? `${weather.main.temp.toFixed(1)}°C` : "N/A"} />
+                  <WeatherCard icon="feelsLike" label="Feels Like" value={weather.main?.feels_like != null ? `${weather.main.feels_like.toFixed(1)}°C` : "N/A"} />
+                  <WeatherCard icon="humidity" label="Humidity" value={weather.main?.humidity != null ? `${weather.main.humidity}%` : "N/A"} />
+                  <WeatherCard icon="wind" label="Wind Speed" value={weather.wind?.speed != null ? `${weather.wind.speed} m/s` : "N/A"} />
+                </div>
+
+                {weather.name && (
+                  <p className="text-xs text-white/40 mt-4 text-center">Weather data for: {weather.name}</p>
+                )}
+              </div>
+            )}
+          </div>
         </main>
-    );
+      </FadeIn>
+    </div>
+  );
+}
+
+type IconName = "book" | "city" | "cloud" | "feelsLike" | "globe" | "humidity" | "id" | "temperature" | "warning" | "wind";
+
+function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" /><path d="M4 5.5v15M8 7h8M8 11h8" /></>,
+    city: <><path d="M4 21h16M6 21V8l6-4 6 4v13M9 10h1M14 10h1M9 14h1M14 14h1M11 21v-4h2v4" /></>,
+    cloud: <><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 8.8 4.5 4.5 0 0 0 7 18Z" /></>,
+    feelsLike: <><path d="M12 3a3 3 0 0 0-3 3v7.1a5 5 0 1 0 6 0V6a3 3 0 0 0-3-3Z" /><path d="M12 8v7M10 17h4" /></>,
+    globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
+    humidity: <><path d="M12 3.5S6.5 10 6.5 14.5a5.5 5.5 0 0 0 11 0C17.5 10 12 3.5 12 3.5Z" /></>,
+    id: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8" cy="12" r="2" /><path d="M13 10h5M13 14h4" /></>,
+    temperature: <><path d="M14 14.8V6a2 2 0 1 0-4 0v8.8a4 4 0 1 0 4 0Z" /><path d="M12 10v7" /></>,
+    warning: <><path d="m12 3 9 16H3L12 3Z" /><path d="M12 9v4M12 16h.01" /></>,
+    wind: <><path d="M3 8h11a2 2 0 1 0-2-2M3 12h15a2 2 0 1 1-2 2M3 16h8" /></>,
+  };
+
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>{paths[name]}</svg>;
+}
+
+function InfoCard({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <div className="glass-card-md p-5 flex items-center gap-3">
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-white/10 flex items-center justify-center shrink-0">
+        <Icon name={icon} className="h-5 w-5 text-orange-200" />
+      </div>
+      <div>
+        <p className="glass-label">{label}</p>
+        <p className="font-semibold text-white mt-0.5 text-sm">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function WeatherCard({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <div className="glass-card-md p-4 text-center">
+      <Icon name={icon} className="mx-auto h-6 w-6 text-sky-200" />
+      <p className="text-xs text-white/60 mt-1.5 font-medium">{label}</p>
+      <p className="text-base font-bold text-white mt-1">{value}</p>
+    </div>
+  );
+}
+
+function HeroImage({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  return (
+    <>
+      {!loaded && !error && (
+        <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/[0.02] to-white/5 animate-pulse" />
+      )}
+      {!error ? (
+        <img
+          src={src} alt={alt} loading="lazy"
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Icon name="globe" className="h-20 w-20 text-white/70" />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function DestinationDetailPage() {
+  return <ProtectedRoute><DestinationDetailContent /></ProtectedRoute>;
 }

@@ -20,7 +20,6 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { setError("Passwords do not match."); return; }
     if (password.length < 6)  { setError("Password must be at least 6 characters."); return; }
     setLoading(true);
-    // Placeholder — password reset backend not yet implemented
     await new Promise(r => setTimeout(r, 1000));
     setLoading(false);
     router.push("/login");
@@ -28,50 +27,55 @@ export default function ResetPasswordPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Type New Password</h1>
-      <p className="text-gray-500 text-sm mb-7">
+      <h1 className="text-[1.75rem] font-bold text-white leading-snug mb-2">Type New Password</h1>
+      <p className="text-white/60 text-sm mb-8 leading-relaxed">
         Please type your new password and don&apos;t forget to re-check.
       </p>
 
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
-          {error}
+        <div className="glass-banner glass-banner--error mb-5">
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* New Password */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">New Password</label>
+          <label className="glass-label">
+            New Password
+          </label>
           <div className="relative">
             <input
               type={showPw ? "text" : "password"} required
               value={password} onChange={e => setPassword(e.target.value)}
               placeholder="Enter new password"
-              className="w-full rounded-lg border-2 border-orange-400 bg-white px-4 py-2.5 text-sm
-                         focus:outline-none focus:border-orange-500 placeholder-gray-400 pr-16"
+              className="glass-input pr-16 !border-orange-400/60 focus:!border-orange-400"
             />
-            <button type="button" onClick={() => setShowPw(p => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">
+            <button
+              type="button" onClick={() => setShowPw(p => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-white/40 hover:text-white/80 px-1 rounded transition-colors duration-150"
+            >
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
         </div>
 
-        {/* Confirm Password */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Confirm Password</label>
+          <label className="glass-label">
+            Confirm Password
+          </label>
           <div className="relative">
             <input
               type={showCf ? "text" : "password"} required
               value={confirm} onChange={e => setConfirm(e.target.value)}
               placeholder="Re-enter new password"
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm
-                         focus:outline-none focus:border-orange-400 placeholder-gray-400 pr-16"
+              className="glass-input pr-16"
             />
-            <button type="button" onClick={() => setShowCf(p => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">
+            <button
+              type="button" onClick={() => setShowCf(p => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-white/40 hover:text-white/80 px-1 rounded transition-colors duration-150"
+            >
               {showCf ? "Hide" : "Show"}
             </button>
           </div>
@@ -79,18 +83,18 @@ export default function ResetPasswordPage() {
 
         <button
           type="submit" disabled={loading}
-          className="rounded-full bg-orange-500 hover:bg-orange-600 px-6 py-2.5 text-sm
-                     font-semibold text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="glass-btn-primary w-full px-6 py-3
+                     disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
         >
           {loading ? "Saving…" : "Save New Password"}
         </button>
       </form>
 
-      <p className="mt-8 text-xs text-gray-400">
+      <p className="mt-8 text-xs text-white/40 leading-relaxed">
         By continuing, you agree to TripNest{" "}
-        <Link href="#" className="text-orange-500 hover:underline">Privacy Policy</Link>
+        <Link href="#" className="text-orange-400 hover:underline font-medium">Privacy Policy</Link>
         {" "}and{" "}
-        <Link href="#" className="text-orange-500 hover:underline">Terms of Service</Link>
+        <Link href="#" className="text-orange-400 hover:underline font-medium">Terms of Service</Link>
       </p>
     </>
   );
