@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,32 +25,49 @@ public class TripJoinRequestService {
     private final TripMemberRepository tripMemberRepository;
     private final UserRepository userRepository;
     private final TripAccessService tripAccessService;
+    private final NotificationService notificationService;
 
     /**
-     * Search trips by title/name, annotating each trip with the calling user's status.
+     * Search trips by title and determine the relationship of the requesting user.
      */
     @Transactional(readOnly = true)
-    public List<TripSearchResultResponse> searchTripsByName(String name, String authEmail) {
-        String query = name != null ? name.trim() : "";
-        List<Trip> trips = query.isEmpty()
-                ? tripRepository.findAll()
-                : tripRepository.findByTitleContainingIgnoreCase(query);
+    public List<TripSearchResultResponse> searchTripsByName(String query, String authEmail) {
+        List<Trip> trips;
+        if (query == null || query.trim().isEmpty()) {
+            trips = tripRepository.findAll();
+        } else {
+            trips = tripRepository.findByTitleContainingIgnoreCase(query.trim());
+        }
 
         return trips.stream().map(trip -> {
-            String relationship = determineUserRelationship(trip, authEmail);
+            String relationship = "NONE";
+            if (authEmail != null) {
+                if (trip.getUser().getEmail().equalsIgnoreCase(authEmail)) {
+                    relationship = "OWNER";
+                } else {
+                    Optional<TripMember> memberOpt = tripMemberRepository.findByTripIdAndUserEmail(trip.getId(),
+                            authEmail);
+                    if (memberOpt.isPresent()) {
+                        relationship = memberOpt.get().getRole().name();
+                    } else if (joinRequestRepository.existsByTripIdAndUserEmailAndStatus(trip.getId(), authEmail,
+                            TripJoinRequestStatus.PENDING)) {
+                        relationship = "REQUEST_PENDING";
+                    }
+                }
+            }
+
             return new TripSearchResultResponse(
                     trip.getId(),
                     trip.getTitle(),
                     trip.getDescription(),
                     trip.getDestination() != null ? trip.getDestination().getName() : null,
-                    trip.getUser() != null ? trip.getUser().getName() : null,
+                    trip.getUser().getName(),
                     trip.getStartDate(),
                     trip.getEndDate(),
                     trip.getBudget(),
-                    trip.getStatus(),
+                    trip.getStatus().name(),
                     trip.getCreatedAt(),
-                    relationship
-            );
+                    relationship);
         }).toList();
     }
 
@@ -75,7 +93,8 @@ public class TripJoinRequestService {
         }
 
         // Validation 3: cannot submit duplicate pending request
-        if (joinRequestRepository.existsByTripIdAndUserEmailAndStatus(tripId, authEmail, TripJoinRequestStatus.PENDING)) {
+        if (joinRequestRepository.existsByTripIdAndUserEmailAndStatus(tripId, authEmail,
+                TripJoinRequestStatus.PENDING)) {
             throw new IllegalStateException("A pending join request for this trip already exists.");
         }
 
@@ -86,6 +105,18 @@ public class TripJoinRequestService {
         joinRequest.setMessage(req != null ? req.getMessage() : null);
 
         TripJoinRequest saved = joinRequestRepository.save(joinRequest);
+
+        // Notify trip owner
+        notificationService.createNotification(
+                trip.getUser(),
+                "New Join Request",
+                user.getName() + " requested to join your trip '" + trip.getTitle() + "'."
+                        + (req != null && req.getMessage() != null && !req.getMessage().isBlank()
+                                ? " Note: \"" + req.getMessage() + "\""
+                                : ""),
+                "JOIN_REQUEST",
+                tripId);
+
         return toResponse(saved);
     }
 
@@ -119,7 +150,8 @@ public class TripJoinRequestService {
         }
 
         if (request.getStatus() != TripJoinRequestStatus.PENDING) {
-            throw new IllegalStateException("Join request has already been " + request.getStatus().name().toLowerCase());
+            throw new IllegalStateException(
+                    "Join request has already been " + request.getStatus().name().toLowerCase());
         }
 
         request.setRespondedAt(LocalDateTime.now());
@@ -139,12 +171,22 @@ public class TripJoinRequestService {
             request.setStatus(TripJoinRequestStatus.REJECTED);
         }
 
-        TripJoinRequest saved = joinRequestRepository.save(request);
-        return toResponse(saved);
+        TripJoinRequest updated = joinRequestRepository.save(request);
+
+        // Notify the requester of the outcome
+        notificationService.createNotification(
+                request.getUser(),
+                accept ? "Join Request Accepted 🎉" : "Join Request Declined",
+                "Your request to join the trip '" + trip.getTitle() + "' was "
+                        + (accept ? "accepted! You can now collaborate on this trip." : "declined by the trip admin."),
+                accept ? "JOIN_APPROVED" : "JOIN_REJECTED",
+                tripId);
+
+        return toResponse(updated);
     }
 
     /**
-     * List join requests submitted by the calling user.
+     * List all join requests submitted by the logged in user.
      */
     @Transactional(readOnly = true)
     public List<TripJoinResponse> listMyJoinRequests(String authEmail) {
@@ -154,34 +196,18 @@ public class TripJoinRequestService {
                 .toList();
     }
 
-    private String determineUserRelationship(Trip trip, String authEmail) {
-        if (authEmail == null) return "NONE";
-        if (tripAccessService.isOwner(trip, authEmail)) {
-            return "OWNER";
-        }
-        var memberOpt = tripMemberRepository.findByTripIdAndUserEmail(trip.getId(), authEmail);
-        if (memberOpt.isPresent()) {
-            return memberOpt.get().getRole().name();
-        }
-        if (joinRequestRepository.existsByTripIdAndUserEmailAndStatus(trip.getId(), authEmail, TripJoinRequestStatus.PENDING)) {
-            return "REQUEST_PENDING";
-        }
-        return "NONE";
-    }
-
-    private TripJoinResponse toResponse(TripJoinRequest req) {
+    private TripJoinResponse toResponse(TripJoinRequest r) {
         return new TripJoinResponse(
-                req.getId(),
-                req.getTrip().getId(),
-                req.getTrip().getTitle(),
-                req.getUser().getId(),
-                req.getUser().getName(),
-                req.getUser().getEmail(),
-                req.getUser().getProfilePhotoUrl(),
-                req.getStatus(),
-                req.getMessage(),
-                req.getCreatedAt(),
-                req.getRespondedAt()
-        );
+                r.getId(),
+                r.getTrip().getId(),
+                r.getTrip().getTitle(),
+                r.getUser().getId(),
+                r.getUser().getName(),
+                r.getUser().getEmail(),
+                r.getUser().getProfilePhotoUrl(),
+                r.getStatus(),
+                r.getMessage(),
+                r.getCreatedAt(),
+                r.getRespondedAt());
     }
 }

@@ -8,6 +8,7 @@ import com.tripnest.tripnest_backend.entity.User;
 import com.tripnest.tripnest_backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,16 +23,17 @@ public class ExpenseService {
     );
 
     private final ExpenseRepository expenseRepository;
-    private final TripRepository    tripRepository;
     private final UserRepository    userRepository;
     private final BudgetRepository  budgetRepository;
+    private final TripAccessService tripAccessService;
 
     // ============================================================
     // CREATE  POST /api/trips/{tripId}/expenses
     // ============================================================
+    @Transactional
     public ExpenseResponse createExpense(Long tripId, ExpenseRequest req, String payerEmail) {
 
-        Trip trip = findTripOwnedByUser(tripId, payerEmail);
+        Trip trip = tripAccessService.checkTripAccess(tripId, payerEmail);
         User payer = findUser(payerEmail);
 
         validateCategory(req.getCategory());
@@ -55,9 +57,10 @@ public class ExpenseService {
     // ============================================================
     // LIST  GET /api/trips/{tripId}/expenses
     // ============================================================
+    @Transactional(readOnly = true)
     public List<ExpenseResponse> listExpenses(Long tripId, String email) {
 
-        findTripOwnedByUser(tripId, email);   // ownership check
+        tripAccessService.checkTripAccess(tripId, email);
 
         return expenseRepository.findByTripIdOrderByExpenseDateDesc(tripId)
                 .stream()
@@ -68,11 +71,20 @@ public class ExpenseService {
     // ============================================================
     // UPDATE  PUT /api/trips/{tripId}/expenses/{expenseId}
     // ============================================================
+    @Transactional
     public ExpenseResponse updateExpense(Long tripId, Long expenseId, ExpenseRequest req, String email) {
 
-        findTripOwnedByUser(tripId, email);
+        tripAccessService.checkTripAccess(tripId, email);
 
         Expense expense = findExpenseBelongingToTrip(expenseId, tripId);
+
+        // Allow update if caller is the payer OR Group Admin / Trip Owner
+        boolean isPayer = expense.getPayer().getEmail().equalsIgnoreCase(email);
+        boolean isAdmin = tripAccessService.isGroupAdminOrOwner(tripId, email);
+
+        if (!isPayer && !isAdmin) {
+            throw new RuntimeException("Access denied: You can only edit your own expenses unless you are a Group Admin or Owner.");
+        }
 
         validateCategory(req.getCategory());
         validateAmount(req.getAmount());
@@ -89,11 +101,19 @@ public class ExpenseService {
     // ============================================================
     // DELETE  DELETE /api/trips/{tripId}/expenses/{expenseId}
     // ============================================================
+    @Transactional
     public void deleteExpense(Long tripId, Long expenseId, String email) {
 
-        findTripOwnedByUser(tripId, email);
+        tripAccessService.checkTripAccess(tripId, email);
 
         Expense expense = findExpenseBelongingToTrip(expenseId, tripId);
+
+        boolean isPayer = expense.getPayer().getEmail().equalsIgnoreCase(email);
+        boolean isAdmin = tripAccessService.isGroupAdminOrOwner(tripId, email);
+
+        if (!isPayer && !isAdmin) {
+            throw new RuntimeException("Access denied: You can only delete your own expenses unless you are a Group Admin or Owner.");
+        }
 
         expenseRepository.delete(expense);
     }
@@ -101,9 +121,10 @@ public class ExpenseService {
     // ============================================================
     // CATEGORY SUMMARY  GET /api/trips/{tripId}/expenses/summary
     // ============================================================
+    @Transactional(readOnly = true)
     public List<CategorySummary> getCategorySummary(Long tripId, String email) {
 
-        findTripOwnedByUser(tripId, email);
+        tripAccessService.checkTripAccess(tripId, email);
 
         return expenseRepository.sumByCategory(tripId)
                 .stream()
@@ -116,11 +137,11 @@ public class ExpenseService {
 
     // ============================================================
     // REMAINING BUDGET  GET /api/trips/{tripId}/expenses/remaining
-    // Remaining = totalBudget (from Budget entity) - sum(expenses)
     // ============================================================
+    @Transactional(readOnly = true)
     public RemainingBudgetResponse getRemainingBudget(Long tripId, String email) {
 
-        findTripOwnedByUser(tripId, email);
+        tripAccessService.checkTripAccess(tripId, email);
 
         Budget budget = budgetRepository.findByTripId(tripId)
                 .orElseThrow(() -> new RuntimeException(
@@ -143,15 +164,6 @@ public class ExpenseService {
     // ============================================================
     // PRIVATE HELPERS
     // ============================================================
-
-    private Trip findTripOwnedByUser(Long tripId, String email) {
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException("Trip not found: " + tripId));
-        if (!trip.getUser().getEmail().equals(email)) {
-            throw new RuntimeException("Access denied: you do not own this trip.");
-        }
-        return trip;
-    }
 
     private User findUser(String email) {
         return userRepository.findByEmail(email)

@@ -45,4 +45,13 @@ public class ItineraryController {
             Authentication authentication) {
         return itineraryService.updateDay(tripId, itineraryId, request, authentication.getName());
     }
+
+    @DeleteMapping("/{itineraryId}")
+    public ResponseEntity<Void> deleteDay(
+            @PathVariable Long tripId,
+            @PathVariable Integer itineraryId,
+            Authentication authentication) {
+        itineraryService.deleteDay(tripId, itineraryId, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
 }

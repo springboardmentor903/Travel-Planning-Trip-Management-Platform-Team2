@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 interface NavbarProps {
   backHref?: string;
@@ -90,6 +91,9 @@ export default function Navbar({ backHref, backLabel }: NavbarProps) {
               </Link>
             </>
           )}
+
+          {/* Notification Bell */}
+          {user && <NotificationBell />}
 
           {/* Divider */}
           <span className="hidden sm:block w-px h-5 bg-white/10 mx-1" />

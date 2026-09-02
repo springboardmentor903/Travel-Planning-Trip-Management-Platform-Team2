@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
 import ActivitySection from "@/components/ActivitySection";
 import BudgetExpenseSection from "@/components/BudgetExpenseSection";
+import TripMembersSection from "@/components/TripMembersSection";
 import { getTripById, deleteTrip } from "@/lib/tripApi";
-import { getItineraries, createItinerary } from "@/lib/itineraryApi";
+import { getItineraries, createItinerary, updateItinerary, deleteItinerary } from "@/lib/itineraryApi";
 import { TripResponse, ItineraryResponse } from "@/lib/types";
 import FadeIn from "@/components/ui/FadeIn";
 import { StaggerList, StaggerItem } from "@/components/ui/StaggerList";
@@ -56,9 +57,22 @@ function TripDetailContent() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Itinerary State
   const [itineraries, setItineraries] = useState<ItineraryResponse[]>([]);
+  const [showAddDayForm, setShowAddDayForm] = useState(false);
+  const [selectedDayDate, setSelectedDayDate] = useState("");
+  const [dayNotes, setDayNotes] = useState("");
   const [addingDay, setAddingDay] = useState(false);
   const [itineraryError, setItineraryError] = useState("");
+
+  // Edit Day State
+  const [editingDayId, setEditingDayId] = useState<number | null>(null);
+  const [editDayDate, setEditDayDate] = useState("");
+  const [editDayNotes, setEditDayNotes] = useState("");
+  const [updatingDay, setUpdatingDay] = useState(false);
+
+  // Day Filter State ('all' or specific day ID)
+  const [selectedDayFilter, setSelectedDayFilter] = useState<number | "all">("all");
 
   useEffect(() => {
     async function load() {
@@ -68,7 +82,11 @@ function TripDetailContent() {
           getItineraries(id),
         ]);
         setTrip(tripData);
-        setItineraries(itin);
+        // Sort chronologically
+        const sortedItin = [...itin].sort(
+          (a, b) => new Date(a.dayDate).getTime() - new Date(b.dayDate).getTime()
+        );
+        setItineraries(sortedItin);
       } catch {
         setError("Unable to load trip details.");
       } finally {
@@ -78,20 +96,89 @@ function TripDetailContent() {
     if (!isNaN(id)) load();
   }, [id]);
 
-  async function handleAddDay() {
-    if (!trip) return;
+  // Open Add Day Form with suggested date
+  function handleOpenAddDay() {
+    let nextDateStr = new Date().toISOString().split("T")[0];
+
+    if (itineraries.length > 0) {
+      // Find the last date and add 1 day
+      const lastDay = itineraries[itineraries.length - 1];
+      const nextDate = new Date(lastDay.dayDate + "T00:00:00");
+      nextDate.setDate(nextDate.getDate() + 1);
+      nextDateStr = nextDate.toISOString().split("T")[0];
+    } else if (trip?.startDate) {
+      nextDateStr = trip.startDate;
+    }
+
+    setSelectedDayDate(nextDateStr);
+    setDayNotes("");
+    setItineraryError("");
+    setShowAddDayForm(true);
+  }
+
+  async function handleAddDaySubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!selectedDayDate) {
+      setItineraryError("Please select a date for this day.");
+      return;
+    }
+
     try {
-      setAddingDay(true); setItineraryError("");
-      const base = trip.startDate ? new Date(trip.startDate) : new Date();
-      base.setDate(base.getDate() + itineraries.length);
-      const dayDate = base.toISOString().split("T")[0];
-      const newDay = await createItinerary(id, dayDate);
-      setItineraries((prev) => [...prev, newDay]);
-      addToast("Day added", "success");
-    } catch {
-      setItineraryError("Unable to add day. Please try again.");
+      setAddingDay(true);
+      setItineraryError("");
+      const newDay = await createItinerary(id, selectedDayDate, dayNotes.trim() || undefined);
+      setItineraries((prev) => {
+        const updated = [...prev, newDay];
+        return updated.sort((a, b) => new Date(a.dayDate).getTime() - new Date(b.dayDate).getTime());
+      });
+      setShowAddDayForm(false);
+      setSelectedDayFilter(newDay.id);
+      addToast("Day added to itinerary", "success");
+    } catch (err: any) {
+      setItineraryError(err?.response?.data?.message || err?.message || "Unable to add day. Please try again.");
     } finally {
       setAddingDay(false);
+    }
+  }
+
+  function startEditDay(day: ItineraryResponse) {
+    setEditingDayId(day.id);
+    setEditDayDate(day.dayDate);
+    setEditDayNotes(day.notes || "");
+  }
+
+  async function handleSaveEditDay(e: FormEvent, dayId: number) {
+    e.preventDefault();
+    if (!editDayDate) return;
+
+    try {
+      setUpdatingDay(true);
+      const updated = await updateItinerary(id, dayId, editDayDate, editDayNotes.trim() || undefined);
+      setItineraries((prev) => {
+        const next = prev.map((d) => (d.id === dayId ? updated : d));
+        return next.sort((a, b) => new Date(a.dayDate).getTime() - new Date(b.dayDate).getTime());
+      });
+      setEditingDayId(null);
+      addToast("Itinerary day updated", "success");
+    } catch (err: any) {
+      addToast(err?.response?.data?.message || "Failed to update day.", "error");
+    } finally {
+      setUpdatingDay(false);
+    }
+  }
+
+  async function handleDeleteDay(dayId: number, dayNumber: number) {
+    if (!confirm(`Delete Day ${dayNumber} and all its activities?`)) return;
+
+    try {
+      await deleteItinerary(id, dayId);
+      setItineraries((prev) => prev.filter((d) => d.id !== dayId));
+      if (selectedDayFilter === dayId) {
+        setSelectedDayFilter("all");
+      }
+      addToast(`Day ${dayNumber} removed`, "info");
+    } catch (err: any) {
+      addToast(err?.response?.data?.message || "Failed to delete day.", "error");
     }
   }
 
@@ -102,11 +189,16 @@ function TripDetailContent() {
       await deleteTrip(id);
       addToast("Trip deleted", "info");
       router.push("/trips");
-    } catch {
-      alert("Failed to delete trip.");
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to delete trip. Only the Trip Owner or Group Admin can delete the trip.");
       setDeleting(false);
     }
   }
+
+  const displayedItineraries =
+    selectedDayFilter === "all"
+      ? itineraries
+      : itineraries.filter((d) => d.id === selectedDayFilter);
 
   if (loading) return (
     <div className="glass-canvas min-h-screen">
@@ -148,6 +240,7 @@ function TripDetailContent() {
       <FadeIn>
         <main className="glass-content relative max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
 
+          {/* Title & Top Action Bar */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div>
               <span className={STATUS_PILL[trip.status] ?? "glass-pill glass-pill--default"}>
@@ -158,20 +251,21 @@ function TripDetailContent() {
             <div className="flex gap-2 shrink-0">
               <Link
                 href={`/trips/${id}/edit`}
-                className="glass-btn-ghost px-4 py-2"
+                className="glass-btn-ghost px-4 py-2 text-sm"
               >
                 Edit
               </Link>
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={handleDeleteTrip} disabled={deleting}
-                className="glass-btn-danger px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="glass-btn-danger px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {deleting ? "Deleting…" : "Delete"}
               </motion.button>
             </div>
           </div>
 
+          {/* Trip Overview Card */}
           <div className="glass-card p-7 sm:p-8">
             <div className="glass-icon-chip mb-5">
               <span className="text-sm">📋</span>
@@ -193,66 +287,302 @@ function TripDetailContent() {
             )}
           </div>
 
+          {/* Group Collaboration / Members Section */}
+          <TripMembersSection tripId={id} ownerName={trip.ownerName} />
+
+          {/* Budget & Expense Tracker */}
           <BudgetExpenseSection tripId={id} />
 
-          <div className="glass-card p-7 sm:p-8">
-            <div className="flex items-center justify-between mb-2">
+          {/* ============================================================ */}
+          {/* DAYWISE ITINERARY & ACTIVITIES */}
+          {/* ============================================================ */}
+          <div className="glass-card p-7 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="glass-icon-chip">
-                <span className="text-sm">🗓️</span>
+                <span className="text-lg">🗓️</span>
                 <div>
-                  <span className="block text-sm font-semibold text-white/90">Itinerary</span>
+                  <h2 className="text-base font-bold text-white tracking-tight">Daywise Itinerary</h2>
                   <p className="text-xs text-white/50 mt-0.5">
                     {itineraries.length === 0
                       ? "No days planned yet."
-                      : `${itineraries.length} day${itineraries.length > 1 ? "s" : ""} planned.`}
+                      : `${itineraries.length} day${itineraries.length > 1 ? "s" : ""} scheduled.`}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleAddDay} disabled={addingDay}
-                className="glass-btn-primary px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {addingDay ? "Adding…" : "+ Add Day"}
-              </button>
+
+              {!showAddDayForm && (
+                <button
+                  onClick={handleOpenAddDay}
+                  className="glass-btn-primary px-5 py-2.5 text-sm shrink-0 flex items-center gap-1.5"
+                >
+                  <span>+</span>
+                  <span>Add Day</span>
+                </button>
+              )}
             </div>
 
-            {itineraryError && (
-              <div className="glass-banner glass-banner--error mt-3">
-                <span>⚠️</span>
-                <span>{itineraryError}</span>
-              </div>
-            )}
-
-            {itineraries.length === 0 && !itineraryError && (
-              <div className="mt-6 rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center">
-                <p className="text-white/40 text-sm">Click &ldquo;+ Add Day&rdquo; to start building your itinerary.</p>
-              </div>
-            )}
-
-            {itineraries.length > 0 && (
-              <StaggerList className="mt-6 space-y-4">
-                {itineraries.map((day, index) => (
-                  <StaggerItem key={day.id}>
-                    <div className="glass-card-md overflow-hidden">
-                      <div className="px-5 py-3.5 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent">
-                        <div>
-                          <span className="text-xs font-bold uppercase tracking-wider text-orange-400">Day {index + 1}</span>
-                          <p className="text-sm font-semibold text-white mt-0.5">
-                            {new Date(day.dayDate + "T00:00:00").toLocaleDateString("en-IN", {
-                              weekday: "long", year: "numeric", month: "long", day: "numeric",
-                            })}
-                          </p>
-                        </div>
+            {/* Expandable Add Day Form with Date Picker */}
+            <AnimatePresence>
+              {showAddDayForm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <form
+                    onSubmit={handleAddDaySubmit}
+                    className="rounded-2xl border border-orange-500/30 bg-gradient-to-b from-orange-500/10 via-amber-500/5 to-white/[0.02] p-5 sm:p-6 backdrop-blur-xl space-y-4 shadow-lg"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">📅</span>
+                        <h3 className="text-sm font-semibold text-white">
+                          Select Date & Plan Itinerary Day
+                        </h3>
                       </div>
-                      {day.notes && (
-                        <p className="px-5 py-2.5 text-sm text-white/60 border-b border-white/10 bg-white/[0.015]">{day.notes}</p>
-                      )}
-                      <div className="px-5 py-4">
-                        <ActivitySection itineraryId={day.id} />
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDayForm(false)}
+                        className="text-white/50 hover:text-white text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="glass-label mb-1.5">
+                          Select Date <span className="text-orange-400">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={selectedDayDate}
+                          min={trip.startDate || undefined}
+                          max={trip.endDate || undefined}
+                          onChange={(e) => setSelectedDayDate(e.target.value)}
+                          className="glass-input text-sm"
+                        />
+                        {trip.startDate && trip.endDate && (
+                          <p className="text-[10px] text-white/40 mt-1">
+                            Trip range: {trip.startDate} to {trip.endDate}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="glass-label mb-1.5">
+                          Day Theme / Notes (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Old Goa Heritage Walk & Sunset Cruise"
+                          value={dayNotes}
+                          onChange={(e) => setDayNotes(e.target.value)}
+                          className="glass-input text-sm"
+                        />
                       </div>
                     </div>
-                  </StaggerItem>
-                ))}
+
+                    {itineraryError && (
+                      <div className="glass-banner glass-banner--error text-xs">
+                        <span>⚠️</span>
+                        <span>{itineraryError}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDayForm(false)}
+                        disabled={addingDay}
+                        className="glass-btn-ghost px-4 py-2 text-xs font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={addingDay || !selectedDayDate}
+                        className="glass-btn-primary px-6 py-2 text-xs font-semibold disabled:opacity-50"
+                      >
+                        {addingDay ? "Adding…" : "Save Itinerary Day"}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Date / Day Selection Filter Pills */}
+            {itineraries.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 border-b border-white/10 no-scrollbar">
+                <button
+                  onClick={() => setSelectedDayFilter("all")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all duration-200 ${
+                    selectedDayFilter === "all"
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md"
+                      : "bg-white/[0.04] text-white/60 hover:text-white border border-white/10"
+                  }`}
+                >
+                  All Days ({itineraries.length})
+                </button>
+
+                {itineraries.map((day, idx) => {
+                  const dayDateObj = new Date(day.dayDate + "T00:00:00");
+                  const formattedShort = dayDateObj.toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                  });
+                  const isSelected = selectedDayFilter === day.id;
+
+                  return (
+                    <button
+                      key={day.id}
+                      onClick={() => setSelectedDayFilter(day.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all duration-200 flex items-center gap-1.5 ${
+                        isSelected
+                          ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md"
+                          : "bg-white/[0.04] text-white/60 hover:text-white border border-white/10"
+                      }`}
+                    >
+                      <span>Day {idx + 1}</span>
+                      <span className="text-[11px] opacity-75 font-normal">({formattedShort})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {itineraries.length === 0 && !showAddDayForm && (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center space-y-3">
+                <span className="text-3xl block">🗺️</span>
+                <h3 className="text-sm font-semibold text-white">No days scheduled yet</h3>
+                <p className="text-xs text-white/40 max-w-sm mx-auto">
+                  Click &ldquo;+ Add Day&rdquo; to select a date and organize activities day by day.
+                </p>
+                <button
+                  onClick={handleOpenAddDay}
+                  className="glass-btn-primary px-6 py-2.5 text-xs font-semibold inline-flex items-center gap-1.5 mt-2"
+                >
+                  <span>📅</span>
+                  <span>Plan First Day</span>
+                </button>
+              </div>
+            )}
+
+            {/* Daywise Itinerary List */}
+            {displayedItineraries.length > 0 && (
+              <StaggerList className="space-y-5">
+                {displayedItineraries.map((day) => {
+                  // Find 1-based index in full sorted list
+                  const fullIndex = itineraries.findIndex((d) => d.id === day.id);
+                  const isEditingThisDay = editingDayId === day.id;
+
+                  return (
+                    <StaggerItem key={day.id}>
+                      <div className="glass-card-md overflow-hidden border border-white/15 shadow-xl">
+                        {/* Day Card Header with Date Info and Actions */}
+                        <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-extrabold uppercase tracking-wider text-orange-400">
+                                Day {fullIndex + 1}
+                              </span>
+                              <span className="text-xs text-white/40">&bull;</span>
+                              <span className="text-sm font-bold text-white">
+                                {new Date(day.dayDate + "T00:00:00").toLocaleDateString("en-IN", {
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                })}
+                              </span>
+                            </div>
+                            {day.notes && !isEditingThisDay && (
+                              <p className="text-xs text-white/70 mt-1 font-medium italic">
+                                &ldquo;{day.notes}&rdquo;
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Edit / Delete Day Buttons */}
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            <button
+                              onClick={() => startEditDay(day)}
+                              title="Change date or notes"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold text-white/70 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors"
+                            >
+                              ✏️ Edit Date
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDay(day.id, fullIndex + 1)}
+                              title="Delete this day"
+                              className="p-1 rounded-lg text-rose-300 hover:text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-400/20 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Inline Edit Form */}
+                        {isEditingThisDay && (
+                          <form
+                            onSubmit={(e) => handleSaveEditDay(e, day.id)}
+                            className="p-4 bg-[#0a0f1d]/90 border-b border-white/10 space-y-3"
+                          >
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="glass-label mb-1">Select New Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={editDayDate}
+                                  onChange={(e) => setEditDayDate(e.target.value)}
+                                  className="glass-input text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="glass-label mb-1">Day Notes / Theme</label>
+                                <input
+                                  type="text"
+                                  value={editDayNotes}
+                                  onChange={(e) => setEditDayNotes(e.target.value)}
+                                  placeholder="e.g. Scuba diving & dinner"
+                                  className="glass-input text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditingDayId(null)}
+                                className="glass-btn-ghost px-3 py-1.5 text-xs font-semibold"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={updatingDay}
+                                className="glass-btn-primary px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+                              >
+                                {updatingDay ? "Saving…" : "Update Day"}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {/* Activities Section for this Day */}
+                        <div className="px-5 py-4">
+                          <ActivitySection itineraryId={day.id} />
+                        </div>
+                      </div>
+                    </StaggerItem>
+                  );
+                })}
               </StaggerList>
             )}
           </div>
