@@ -53,3 +53,75 @@ export interface ExpenseResponse { id: number; tripId: number; category: string;
 export interface CategorySummary { category: string; totalAmount: number; }
 export interface RemainingBudgetResponse { tripId: number; totalBudget: number; totalExpenses: number; remainingBudget: number; currency: string; overBudget: boolean; }
 
+// ===========================
+// TRIP MEMBERS & COLLABORATION
+// ===========================
+export type TripMemberRole = "OWNER" | "GROUP_ADMIN" | "MEMBER";
+
+export interface TripMemberResponse {
+    id: number | null;
+    userId: number;
+    name: string;
+    email: string;
+    role: TripMemberRole;
+    profilePhotoUrl: string | null;
+    joinedAt: string | null;
+    isOwner: boolean;
+}
+
+export interface AddMemberRequest {
+    email: string;
+    role?: "MEMBER" | "GROUP_ADMIN";
+}
+
+export interface UpdateMemberRoleRequest {
+    role: "MEMBER" | "GROUP_ADMIN";
+}
+
+export type JoinRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+
+export interface TripSearchResultResponse {
+    id: number;
+    title: string;
+    description: string | null;
+    destinationName: string | null;
+    ownerName: string;
+    startDate: string | null;
+    endDate: string | null;
+    budget: number | null;
+    status: string;
+    createdAt: string;
+    userRelationship: "OWNER" | "GROUP_ADMIN" | "MEMBER" | "REQUEST_PENDING" | "NONE";
+}
+
+export interface TripJoinRequestDto {
+    message?: string;
+}
+
+export interface TripJoinResponse {
+    id: number;
+    tripId: number;
+    tripTitle: string;
+    userId: number;
+    userName: string;
+    userEmail: string;
+    userProfilePhotoUrl: string | null;
+    status: JoinRequestStatus;
+    message: string | null;
+    createdAt: string;
+    respondedAt: string | null;
+}
+
+// ===========================
+// NOTIFICATIONS
+// ===========================
+export interface NotificationResponse {
+    id: number;
+    userId: number;
+    title: string;
+    message: string;
+    type: "TRIP_INVITE" | "JOIN_REQUEST" | "JOIN_APPROVED" | "JOIN_REJECTED" | "SYSTEM";
+    relatedTripId: number | null;
+    read: boolean;
+    createdAt: string;
+}

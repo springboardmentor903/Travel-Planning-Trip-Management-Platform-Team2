@@ -4,6 +4,7 @@ import com.tripnest.tripnest_backend.dto.ItineraryRequest;
 import com.tripnest.tripnest_backend.dto.ItineraryResponse;
 import com.tripnest.tripnest_backend.entity.Itinerary;
 import com.tripnest.tripnest_backend.entity.Trip;
+import com.tripnest.tripnest_backend.repository.ActivityRepository;
 import com.tripnest.tripnest_backend.repository.ItineraryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import java.util.List;
 public class ItineraryService {
 
     private final ItineraryRepository itineraryRepository;
+    private final ActivityRepository activityRepository;
     private final TripAccessService tripAccessService;
 
     // POST /trips/{tripId}/itineraries — add a day to the trip
@@ -34,7 +36,6 @@ public class ItineraryService {
 
         return toResponse(itineraryRepository.save(itinerary));
     }
-
 
     // GET /trips/{tripId}/itineraries — list all days in trip
     @Transactional(readOnly = true)
@@ -66,9 +67,21 @@ public class ItineraryService {
         return toResponse(itineraryRepository.save(itinerary));
     }
 
+    @Transactional
+    public void deleteDay(Long tripId, Integer itineraryId, String email) {
+        Trip trip = tripAccessService.checkTripAccess(tripId, email);
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new RuntimeException("Itinerary day not found"));
+
+        if (!itinerary.getTrip().getId().equals(trip.getId())) {
+            throw new RuntimeException("Itinerary day does not belong to this trip");
+        }
+
+        activityRepository.deleteByItineraryId(itineraryId);
+        itineraryRepository.delete(itinerary);
+    }
 
     private ItineraryResponse toResponse(Itinerary i) {
-
         return new ItineraryResponse(
                 i.getId(),
                 i.getTrip().getId(),

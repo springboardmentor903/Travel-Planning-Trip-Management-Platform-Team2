@@ -1,17 +1,20 @@
 package com.tripnest.tripnest_backend.config;
 
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+
 import com.tripnest.tripnest_backend.entity.Destination;
 import com.tripnest.tripnest_backend.entity.Role;
 import com.tripnest.tripnest_backend.entity.User;
 import com.tripnest.tripnest_backend.repository.DestinationRepository;
 import com.tripnest.tripnest_backend.repository.RoleRepository;
 import com.tripnest.tripnest_backend.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Component;
 
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -51,9 +54,8 @@ public class DataSeeder implements CommandLineRunner {
             userRepository.save(admin);
         }
 
-        // ── Seed destinations (runs only when table is empty) ───
-        if (destinationRepository.count() == 0) {
-            List<Destination> destinations = List.of(
+        // ── Seed/update curated destinations ────────────────────
+        List<Destination> destinations = List.of(
                 new Destination(null, "Goa", "India", "Panaji",
                     "India's beach paradise famous for its golden sandy shores, vibrant nightlife, Portuguese heritage, water sports, and laid-back Konkani culture.",
                     "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Baga_beach_Goa.jpg/1280px-Baga_beach_Goa.jpg"),
@@ -92,10 +94,79 @@ public class DataSeeder implements CommandLineRunner {
 
                 new Destination(null, "Leh Ladakh", "India", "Leh",
                     "A remote high-altitude desert region with dramatic landscapes, ancient Buddhist monasteries, Pangong Lake, Nubra Valley, and thrilling mountain passes.",
-                    "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Pangong_tso.jpg/1280px-Pangong_tso.jpg")
-            );
-            destinationRepository.saveAll(destinations);
-            System.out.println("[DataSeeder] Seeded " + destinations.size() + " destinations.");
-        }
+                    "https://images.unsplash.com/photo-1626014303757-63616a3c5b55?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Paris", "France", "Paris",
+                    "The City of Light blends iconic landmarks, celebrated art museums, elegant cafés, and timeless streets along the Seine.",
+                    "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Kyoto", "Japan", "Kyoto",
+                    "Japan's cultural heart, known for serene temples, bamboo groves, traditional tea houses, and seasonal cherry blossoms.",
+                    "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "New York City", "United States", "New York",
+                    "A fast-paced city of world-class museums, Broadway, landmark architecture, diverse neighborhoods, and unforgettable skyline views.",
+                    "https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Dubai", "United Arab Emirates", "Dubai",
+                    "A modern desert metropolis where landmark towers, golden dunes, waterfront dining, and traditional souks meet.",
+                    "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "London", "United Kingdom", "London",
+                    "A historic and cosmopolitan capital with royal landmarks, vibrant markets, acclaimed theatre, and museums for every interest.",
+                    "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Rome", "Italy", "Rome",
+                    "An open-air museum of ancient ruins, lively piazzas, remarkable cuisine, and centuries of art and architecture.",
+                    "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Bali", "Indonesia", "Denpasar",
+                    "A tropical escape celebrated for lush rice terraces, Hindu temples, surf beaches, wellness retreats, and warm hospitality.",
+                    "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=85"),
+
+                new Destination(null, "Machu Picchu", "Peru", "Cusco",
+                    "A breathtaking Incan citadel high in the Andes, surrounded by dramatic mountain landscapes and rich archaeological heritage.",
+                    "https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=1200&q=85")
+        );
+
+        destinations.forEach(template -> destinationRepository.findFirstByNameOrderByIdAsc(template.getName())
+                .ifPresentOrElse(existing -> {
+                    existing.setCountry(template.getCountry());
+                    existing.setCity(template.getCity());
+                    existing.setDescription(template.getDescription());
+                    existing.setImageUrl(template.getImageUrl());
+                    destinationRepository.save(existing);
+                }, () -> destinationRepository.save(template)));
+
+        Map<String, double[]> coordinates = Map.ofEntries(
+                Map.entry("Goa", new double[] { 15.4909, 73.8278 }),
+                Map.entry("Manali", new double[] { 32.2432, 77.1892 }),
+                Map.entry("Jaipur", new double[] { 26.9124, 75.7873 }),
+                Map.entry("Kerala Backwaters", new double[] { 9.4981, 76.3388 }),
+                Map.entry("Varanasi", new double[] { 25.3176, 82.9739 }),
+                Map.entry("Agra", new double[] { 27.1767, 78.0081 }),
+                Map.entry("Darjeeling", new double[] { 27.0410, 88.2663 }),
+                Map.entry("Udaipur", new double[] { 24.5854, 73.7125 }),
+                Map.entry("Andaman Islands", new double[] { 11.6234, 92.7265 }),
+                Map.entry("Leh Ladakh", new double[] { 34.1526, 77.5771 }),
+                Map.entry("Paris", new double[] { 48.8566, 2.3522 }),
+                Map.entry("Kyoto", new double[] { 35.0116, 135.7681 }),
+                Map.entry("New York City", new double[] { 40.7128, -74.0060 }),
+                Map.entry("Dubai", new double[] { 25.2048, 55.2708 }),
+                Map.entry("London", new double[] { 51.5072, -0.1276 }),
+                Map.entry("Rome", new double[] { 41.9028, 12.4964 }),
+                Map.entry("Bali", new double[] { -8.6500, 115.2167 }),
+                Map.entry("Machu Picchu", new double[] { -13.1631, -72.5450 })
+        );
+
+        destinationRepository.findAll().forEach(destination -> {
+            double[] location = coordinates.get(destination.getName());
+            if (location != null && (destination.getLatitude() == null || destination.getLongitude() == null)) {
+                destination.setLatitude(location[0]);
+                destination.setLongitude(location[1]);
+            }
+            destination.setImageUrl("/destinations/" + destination.getId() + ".jpg");
+            destinationRepository.save(destination);
+        });
     }
 }

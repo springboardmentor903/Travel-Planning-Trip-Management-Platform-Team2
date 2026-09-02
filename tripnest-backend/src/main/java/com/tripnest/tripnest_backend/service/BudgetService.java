@@ -5,9 +5,9 @@ import com.tripnest.tripnest_backend.dto.BudgetResponse;
 import com.tripnest.tripnest_backend.entity.Budget;
 import com.tripnest.tripnest_backend.entity.Trip;
 import com.tripnest.tripnest_backend.repository.BudgetRepository;
-import com.tripnest.tripnest_backend.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
@@ -16,15 +16,15 @@ import java.math.BigDecimal;
 public class BudgetService {
 
     private final BudgetRepository budgetRepository;
-    private final TripRepository tripRepository;
+    private final TripAccessService tripAccessService;
 
     // =========================================================
     // CREATE — POST /api/trips/{tripId}/budget
     // =========================================================
-
+    @Transactional
     public BudgetResponse createBudget(Long tripId, BudgetRequest request, String email) {
 
-        Trip trip = findTripOwnedByUser(tripId, email);
+        Trip trip = tripAccessService.checkTripAccess(tripId, email);
 
         // Business rule: each trip can only have one budget record
         if (budgetRepository.existsByTripId(tripId)) {
@@ -60,10 +60,10 @@ public class BudgetService {
     // =========================================================
     // UPDATE — PUT /api/trips/{tripId}/budget
     // =========================================================
-
+    @Transactional
     public BudgetResponse updateBudget(Long tripId, BudgetRequest request, String email) {
 
-        findTripOwnedByUser(tripId, email);   // ownership check
+        tripAccessService.checkTripAccess(tripId, email);
 
         Budget budget = budgetRepository.findByTripId(tripId)
                 .orElseThrow(() -> new RuntimeException(
@@ -73,14 +73,12 @@ public class BudgetService {
 
         BigDecimal spent = request.getSpentAmount() != null
                 ? request.getSpentAmount()
-                : budget.getSpentAmount();   // keep existing spent if not provided
+                : budget.getSpentAmount();
 
-        // Validation: new spentAmount must not be negative
         if (spent.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Spent amount cannot be negative.");
         }
 
-        // Allow updating total even when spent > new total — just flag as over-budget
         budget.setTotalBudget(request.getTotalBudget());
         budget.setSpentAmount(spent);
         if (request.getCurrency() != null) {
@@ -97,10 +95,10 @@ public class BudgetService {
     // =========================================================
     // GET — GET /api/trips/{tripId}/budget
     // =========================================================
-
+    @Transactional(readOnly = true)
     public BudgetResponse getBudget(Long tripId, String email) {
 
-        findTripOwnedByUser(tripId, email);   // ownership check
+        tripAccessService.checkTripAccess(tripId, email);
 
         Budget budget = budgetRepository.findByTripId(tripId)
                 .orElseThrow(() -> new RuntimeException(
@@ -110,24 +108,6 @@ public class BudgetService {
         return toResponse(budget);
     }
 
-
-    // =========================================================
-    // HELPERS
-    // =========================================================
-
-    private Trip findTripOwnedByUser(Long tripId, String email) {
-
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Trip not found with id: " + tripId
-                ));
-
-        if (!trip.getUser().getEmail().equals(email)) {
-            throw new RuntimeException("Access denied: you do not own this trip.");
-        }
-
-        return trip;
-    }
 
     private BudgetResponse toResponse(Budget b) {
 

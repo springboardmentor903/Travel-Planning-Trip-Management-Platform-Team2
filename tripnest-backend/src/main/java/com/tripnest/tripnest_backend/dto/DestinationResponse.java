@@ -8,10 +8,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DestinationResponse {
+
     private Integer id;
     private String name;
     private String country;
     private String city;
     private String description;
     private String imageUrl;
+
+    private Double latitude;
+    private Double longitude;
 }

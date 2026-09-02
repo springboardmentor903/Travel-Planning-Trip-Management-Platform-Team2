@@ -8,6 +8,7 @@ import com.tripnest.tripnest_backend.repository.ActivityRepository;
 import com.tripnest.tripnest_backend.repository.ItineraryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -17,11 +18,15 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final ItineraryRepository itineraryRepository;
+    private final TripAccessService tripAccessService;
 
     // POST /itineraries/{itineraryId}/activities
-    public ActivityResponse addActivity(Integer itineraryId, ActivityRequest request) {
+    @Transactional
+    public ActivityResponse addActivity(Integer itineraryId, ActivityRequest request, String email) {
         Itinerary itinerary = itineraryRepository.findById(itineraryId)
                 .orElseThrow(() -> new RuntimeException("Itinerary not found with id: " + itineraryId));
+
+        tripAccessService.checkTripAccess(itinerary.getTrip().getId(), email);
 
         Activity activity = new Activity();
         activity.setItinerary(itinerary);
@@ -36,18 +41,27 @@ public class ActivityService {
     }
 
     // GET /itineraries/{itineraryId}/activities
-    public List<ActivityResponse> listActivities(Integer itineraryId) {
+    @Transactional(readOnly = true)
+    public List<ActivityResponse> listActivities(Integer itineraryId, String email) {
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new RuntimeException("Itinerary not found with id: " + itineraryId));
+
+        tripAccessService.checkTripAccess(itinerary.getTrip().getId(), email);
+
         return activityRepository.findByItineraryIdOrderByStartTimeAsc(itineraryId)
                 .stream().map(this::toResponse).toList();
     }
 
     // PUT /itineraries/{itineraryId}/activities/{activityId}
-    public ActivityResponse updateActivity(Integer itineraryId, Integer activityId, ActivityRequest request) {
+    @Transactional
+    public ActivityResponse updateActivity(Integer itineraryId, Integer activityId, ActivityRequest request, String email) {
         Activity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
         if (!activity.getItinerary().getId().equals(itineraryId)) {
             throw new RuntimeException("Activity does not belong to this itinerary");
         }
+
+        tripAccessService.checkTripAccess(activity.getItinerary().getTrip().getId(), email);
 
         activity.setTitle(request.getTitle());
         activity.setDescription(request.getDescription());
@@ -60,12 +74,16 @@ public class ActivityService {
     }
 
     // DELETE /itineraries/{itineraryId}/activities/{activityId}
-    public void deleteActivity(Integer itineraryId, Integer activityId) {
+    @Transactional
+    public void deleteActivity(Integer itineraryId, Integer activityId, String email) {
         Activity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new RuntimeException("Activity not found with id: " + activityId));
         if (!activity.getItinerary().getId().equals(itineraryId)) {
             throw new RuntimeException("Activity does not belong to this itinerary");
         }
+
+        tripAccessService.checkTripAccess(activity.getItinerary().getTrip().getId(), email);
+
         activityRepository.delete(activity);
     }
 

@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,15 +23,18 @@ public class ActivityController {
     @PostMapping
     public ResponseEntity<ActivityResponse> addActivity(
             @PathVariable Integer itineraryId,
-            @Valid @RequestBody ActivityRequest request) {
-        ActivityResponse response = activityService.addActivity(itineraryId, request);
+            @Valid @RequestBody ActivityRequest request,
+            Authentication auth) {
+        ActivityResponse response = activityService.addActivity(itineraryId, request, auth.getName());
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     // GET /api/itineraries/{itineraryId}/activities — list activities for a day
     @GetMapping
-    public List<ActivityResponse> listActivities(@PathVariable Integer itineraryId) {
-        return activityService.listActivities(itineraryId);
+    public List<ActivityResponse> listActivities(
+            @PathVariable Integer itineraryId,
+            Authentication auth) {
+        return activityService.listActivities(itineraryId, auth.getName());
     }
 
     // PUT /api/itineraries/{itineraryId}/activities/{activityId} — update an activity
@@ -38,16 +42,18 @@ public class ActivityController {
     public ActivityResponse updateActivity(
             @PathVariable Integer itineraryId,
             @PathVariable Integer activityId,
-            @Valid @RequestBody ActivityRequest request) {
-        return activityService.updateActivity(itineraryId, activityId, request);
+            @Valid @RequestBody ActivityRequest request,
+            Authentication auth) {
+        return activityService.updateActivity(itineraryId, activityId, request, auth.getName());
     }
 
     // DELETE /api/itineraries/{itineraryId}/activities/{activityId} — delete an activity
     @DeleteMapping("/{activityId}")
     public ResponseEntity<Void> deleteActivity(
             @PathVariable Integer itineraryId,
-            @PathVariable Integer activityId) {
-        activityService.deleteActivity(itineraryId, activityId);
+            @PathVariable Integer activityId,
+            Authentication auth) {
+        activityService.deleteActivity(itineraryId, activityId, auth.getName());
         return ResponseEntity.noContent().build();
     }
 }

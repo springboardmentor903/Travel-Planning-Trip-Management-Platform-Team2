@@ -101,14 +101,25 @@ public class DestinationService {
                                 )
                         );
 
-        String city =
-                destination.getCity() != null
-                        ? destination.getCity()
-                        : destination.getName();
+        /*
+         * Use latitude and longitude stored with the destination.
+         * This is more reliable than searching by city name,
+         * especially for smaller places such as Dwaraka Tirumala.
+         */
+
+        if (destination.getLatitude() == null
+                || destination.getLongitude() == null) {
+
+            throw new RuntimeException(
+                    "Weather coordinates are not available for: "
+                            + destination.getName()
+            );
+        }
 
         String url = UriComponentsBuilder
                 .fromUriString(weatherApiUrl)
-                .queryParam("q", city)
+                .queryParam("lat", destination.getLatitude())
+                .queryParam("lon", destination.getLongitude())
                 .queryParam("appid", weatherApiKey)
                 .queryParam("units", "metric")
                 .toUriString();
@@ -124,7 +135,7 @@ public class DestinationService {
 
             throw new RuntimeException(
                     "Could not fetch weather for: "
-                            + city
+                            + destination.getName()
                             + ". "
                             + e.getMessage()
             );
@@ -223,6 +234,68 @@ public class DestinationService {
 
 
     // =========================
+    // SAVE DESTINATION FROM SEARCH
+    // =========================
+
+    public DestinationResponse saveFromSearch(
+            Map<String, Object> data
+    ) {
+
+        String name =
+                (String) data.get("name");
+
+        String city =
+                (String) data.get("city");
+
+        String country =
+                (String) data.get("country");
+
+        String description =
+                (String) data.get("description");
+
+        String imageUrl =
+                (String) data.get("imageUrl");
+
+
+        // Get coordinates from the frontend
+        // OpenStreetMap search result
+        Double latitude = null;
+        Double longitude = null;
+
+        Object latitudeValue = data.get("latitude");
+        Object longitudeValue = data.get("longitude");
+
+        if (latitudeValue instanceof Number) {
+            latitude = ((Number) latitudeValue).doubleValue();
+        }
+
+        if (longitudeValue instanceof Number) {
+            longitude = ((Number) longitudeValue).doubleValue();
+        }
+
+
+        Destination destination =
+                new Destination();
+
+        destination.setName(name);
+        destination.setCity(city);
+        destination.setCountry(country);
+        destination.setDescription(description);
+        destination.setImageUrl(imageUrl);
+
+        // Save geographic coordinates
+        destination.setLatitude(latitude);
+        destination.setLongitude(longitude);
+
+
+        Destination saved =
+                destinationRepository.save(destination);
+
+        return toResponse(saved);
+    }
+
+
+    // =========================
     // ENTITY → RESPONSE DTO
     // =========================
 
@@ -236,7 +309,9 @@ public class DestinationService {
                 d.getCountry(),
                 d.getCity(),
                 d.getDescription(),
-                d.getImageUrl()
+                d.getImageUrl(),
+                d.getLatitude(),
+                d.getLongitude()
         );
     }
 }
